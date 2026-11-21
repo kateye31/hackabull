@@ -227,8 +227,11 @@ class AppFlow(unittest.TestCase):
 
     def test_resident_reports_then_reviewer_clears(self):
         at = self._demo_app()
-        at.sidebar.radio[0].set_value("Locations").run()
-        next(b for b in at.button if "demo" in b.label).click().run()
+        ref, blocked, directory = _pair(blocked=True)
+        shutil.copyfile(ref, directory / "reference.jpg")
+        shutil.copyfile(blocked, directory / "blocked.jpg")
+        shutil.copyfile(ref, directory / "cleared.jpg")
+        demo.add_real("Test walkway", directory)
         # resident: one photo and a note
         at.sidebar.radio[0].set_value("Report damage").run()
         at.text_area[0].set_value("Big branch across the sidewalk, no way past with a wheelchair.")
@@ -410,14 +413,17 @@ class ResidentsAPI(unittest.TestCase):
         from api import main
         main._store = None
         client = TestClient(main.app)
-        demo.seed(main.store())
+        ref, capture_path, _ = _pair(blocked=True)
+        loc_id = main.store().add_location("API test walkway", ref)
+        main.store().add_location("Legacy fake", ref, "Demo route after a storm (synthetic). Damage: tree.")
         spots = client.get("/api/locations").json()
-        self.assertGreaterEqual(len(spots), 4)
-        self.assertEqual(client.get(spots[0]["before_url"]).status_code, 200)
-        photo = demo.demo_photo(main.store().location(spots[0]["id"])["reference_path"], "initial").read_bytes()
+        self.assertNotIn("Legacy fake", [spot["name"] for spot in spots])
+        spot = next(spot for spot in spots if spot["id"] == loc_id)
+        self.assertEqual(client.get(spot["before_url"]).status_code, 200)
+        photo = capture_path.read_bytes()
         with patch.object(gemini, "check_resident_photo", return_value="relevant"):
             r = client.post("/api/reports", files={"photo": ("p.jpg", photo, "image/jpeg")},
-                            data={"location_id": spots[0]["id"], "note": "Tree down across the sidewalk"})
+                            data={"location_id": loc_id, "note": "Tree down across the sidewalk"})
         self.assertEqual(r.status_code, 201, r.text)
         rid = r.json()["id"]
         st = client.get(f"/api/reports/{rid}").json()   # background analysis has run by now

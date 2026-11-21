@@ -228,9 +228,13 @@ def page_locations():
                     with st.spinner("Fetching the satellite view…"):
                         pipeline.add_geo(store, loc_id, *point)
                 st.success(f"Added {name}." + ("" if point else " No coordinates: add an address to put it on the map."))
-    if st.button("Add demo locations (no camera needed)"):
-        n = demo.seed(store)
-        st.success(f"Added {n} demo locations." if n else "Demo locations already exist.")
+    if st.button("Add real Tampa Bay demo locations"):
+        try:
+            with st.spinner("Loading Esri and NOAA imagery…"):
+                n = demo.seed(store)
+            st.success(f"Added {n} demo locations." if n else "Demo locations already exist.")
+        except RuntimeError as exc:
+            st.error(str(exc))
     locs = store.locations()
     if any(l.get("lat") is not None for l in locs):
         st.subheader("Map")
@@ -240,8 +244,8 @@ def page_locations():
         for i, l in enumerate(locs):
             with cols[i % 3]:
                 st.image(l["reference_path"], width="stretch")
-                if l.get("satellite_path") and Path(l["satellite_path"]).exists():
-                    st.image(l["satellite_path"], caption="Satellite, before the storm (USGS)", width="stretch")
+                if l.get("satellite_path") and l["satellite_path"] != l["reference_path"] and Path(l["satellite_path"]).exists():
+                    st.image(l["satellite_path"], caption="Overhead location reference", width="stretch")
                 risk = geo.tree_risk(l.get("canopy"))
                 st.markdown(f"**{l['name']}**  \n{l['description'] or ''}")
                 if l.get("canopy") is not None:
@@ -251,31 +255,24 @@ def page_locations():
 
 
 def aerial_controls(l: dict):
-    """After-storm aerial for one spot: upload (NOAA flight or drone, straight down) or a labelled synthetic demo."""
     with st.expander("After-storm aerial"):
         up = st.file_uploader("NOAA post-storm aerial or a drone photo taken straight down",
                               type=["jpg", "jpeg", "png"], key=f"aerial_up_{l['id']}")
-        c1, c2 = st.columns(2)
-        run = c1.button("Compare", key=f"aerial_go_{l['id']}", disabled=up is None)
-        fake = c2.button("Demo: synthetic damage", key=f"aerial_fake_{l['id']}",
-                         help="Draws storm damage onto the real before-storm tile. Synthetic, for demos only.")
-        if run or fake:
-            data = up.getvalue() if run else demo.synthetic_after_aerial(l["satellite_path"], seed=l["id"])
+        if st.button("Compare", key=f"aerial_go_{l['id']}", disabled=up is None):
             with st.spinner("Comparing from above…"):
-                l["aerial_result"] = pipeline.add_after_aerial(store, l["id"], data, synthetic=bool(fake))
+                l["aerial_result"] = pipeline.add_after_aerial(store, l["id"], up.getvalue())
                 l["after_aerial_path"] = str(config.SATELLITE / f"loc{l['id']}_after.jpg")
         show_aerial(l)
 
 
 def show_aerial(l: dict):
     res = l.get("aerial_result")
-    if not res:
-        st.caption("No after-storm aerial yet.")
+    if not res or res.get("synthetic"):
+        st.caption("No real after-storm aerial yet.")
         return
     c1, c2, c3 = st.columns(3)
-    c1.image(l["satellite_path"], caption="Before (USGS NAIP)", width="stretch")
-    c2.image(l["after_aerial_path"], caption="After · SYNTHETIC demo damage" if res.get("synthetic")
-             else "After the storm", width="stretch")
+    c1.image(l["satellite_path"], caption="Before · overhead reference", width="stretch")
+    c2.image(l["after_aerial_path"], caption="After the storm", width="stretch")
     c3.image(res["overlay_path"], caption="Changed from above", width="stretch")
     st.markdown(f"{VERDICT_STYLE[res['verdict']]} &nbsp; {res['largest_region']:.0%} of the view in one changed area")
     if res.get("shift"):

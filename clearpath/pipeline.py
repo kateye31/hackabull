@@ -129,7 +129,7 @@ def new_report(store: Store, location_id: int, image_bytes: bytes, note: str = "
     return iid, save_photo(store, iid, "initial", image_bytes)
 
 
-def add_after_aerial(store: Store, location_id: int, image_bytes: bytes, synthetic: bool = False) -> dict:
+def add_after_aerial(store: Store, location_id: int, image_bytes: bytes) -> dict:
     """An after-storm aerial (NOAA post-storm flight or a drone photo taken straight down) for a spot,
     compared with its before-storm satellite image."""
     from .vision import aerial
@@ -139,6 +139,5 @@ def add_after_aerial(store: Store, location_id: int, image_bytes: bytes, synthet
     dest = config.SATELLITE / f"loc{location_id}_after.jpg"
     capture._to_jpeg(image_bytes, dest)  # strips EXIF like every other photo
     result = aerial.compare_aerial(loc["satellite_path"], dest, config.OVERLAYS / f"aerial_loc{location_id}.png")
-    result["synthetic"] = synthetic  # drawn demo damage, never real imagery: always labelled in the UI
     store.set_aerial(location_id, str(dest), result)
     return result

@@ -275,11 +275,14 @@ def make_site(name: str, lat: float, lon: float, before: str, after: str | None,
             loc_id = existing[name]["id"]
         else:
             ref = meta["images"]["reference.jpg"]
-            loc_id = store.add_location(name, d / "reference.jpg",
-                                        f"Aerial site at {lat:.5f}, {lon:.5f}. Reference: {ref['label']}"
-                                        + (f" (captured {ref['captured']})" if ref["captured"] else "") + ".")
+            loc_id = store.add_location(name, d / "reference.jpg", _describe_reference(ref))
         _connect(store, loc_id, d, lat, lon)
     return d
+
+
+def _describe_reference(info: dict) -> str:
+    return f"Overhead reference: {info['label']}" + (
+        f" · captured {info['captured']}" if info.get("captured") else "")
 
 
 def _connect(store, loc_id: int, d: Path, lat: float, lon: float):

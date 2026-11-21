@@ -64,9 +64,9 @@ def _remoteclip():
 
 def scene_scores(path: Path | str) -> dict:
     """{label: probability} for one aerial image. Use only as half of a before/after shift."""
+    model, preprocess, tf = _remoteclip()
     import torch
     from PIL import Image
-    model, preprocess, tf = _remoteclip()
     with torch.no_grad():
         f = model.encode_image(preprocess(Image.open(path).convert("RGB")).unsqueeze(0))
         f = f / f.norm(dim=-1, keepdim=True)

@@ -67,7 +67,7 @@ Two websites, one database: **residents** use the residents' site (localhost:800
 | 0:55 | Reviewer app → **Review queue**: the map, the new report's pin now red → *Needs review* → **Open** | "The reviewer sees the whole neighborhood: red needs a look, amber is waiting for a crew, green is clear. Every report in one queue, with the resident's note." |
 | 1:05 | Before / after / highlighted, then **Damage analysis** | "DINOv2 finds what's new. SegFormer finds the walkway in the before photo, so we can measure: 38% of the walkway blocked, narrowest clear width 25%. CLIP suggests the kind of damage." Hover a metric to show the equation. |
 | 1:30 | **Response plan** + nearby table | "From that, a plan: crew, equipment, steps, safety, and the real contractors nearby to call, from OpenStreetMap. With a Gemini key, Gemini plans it as an agent and looks up the contractors itself." |
-| 1:50 | **From above: satellite check** (after using **Demo: synthetic damage** on that spot beforehand) | "From above, before vs after. This after image is synthetic for the demo; after a real storm it's NOAA's aerial survey or a drone." |
+| 1:50 | **From above: satellite check** on a Tampa Bay preset | "This compares a dated Esri Wayback reference with NOAA’s actual post-storm aerial survey." |
 | 2:05 | Confirm details → **Mark as sent** | "A person signs off. Nothing goes out unconfirmed." |
 | 2:20 | After cleanup: cleared photo → **Confirm cleared** | "Same spot, same before-storm photo: clear, so the route is open again." |
 | 2:40 | **Back to queue** | "Every route in the neighborhood and whether it's passable. A recovery map built one photo at a time." |
@@ -75,8 +75,7 @@ Two websites, one database: **residents** use the residents' site (localhost:800
 Demo locations:
 
 - **Your real staged locations** first. They're the strongest evidence, and the damage-type suggestions only work well on real photos.
-- **Bayview Avenue curb ramp** (synthetic debris pile): DINOv2 *obstructed*, pixel baseline *clear*.
-- The synthetic routes are cartoons: skip the "Looks like:" damage-type line on them (CLIP guesses wrong on drawings) and point at the walkway numbers instead.
+- **Tampa Bay overhead presets** use dated Esri Wayback before images and NOAA after-storm imagery. Use a ground photo from the selected location to demonstrate a resident upload.
 
 ## 4. Backup plan
 

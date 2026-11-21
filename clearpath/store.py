@@ -66,6 +66,11 @@ def now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+# Retire generated demo records from the app while preserving the database history.
+_REAL_LOCATION = "(lower(coalesce(l.description, '')) NOT LIKE 'demo route after a storm (synthetic)%' AND " \
+                 "lower(coalesce(l.description, '')) NOT LIKE 'demo walkway (synthetic)%')"
+
+
 class Store:
     def __init__(self, path: Path | None = None):
         self.path = Path(path or config.DB_PATH)
@@ -104,18 +109,18 @@ class Store:
 
     def locations(self) -> list[dict]:
         with self._c() as c:
-            return [_loc(r) for r in c.execute("SELECT * FROM locations ORDER BY name")]
+            return [_loc(r) for r in c.execute(f"SELECT * FROM locations l WHERE {_REAL_LOCATION} ORDER BY name")]
 
     def location(self, location_id: int) -> dict | None:
         with self._c() as c:
-            r = c.execute("SELECT * FROM locations WHERE id=?", (location_id,)).fetchone()
+            r = c.execute(f"SELECT * FROM locations l WHERE id=? AND {_REAL_LOCATION}", (location_id,)).fetchone()
             return _loc(r) if r else None
 
     # ---------- inspections ----------
     def new_inspection(self, location_id: int) -> str:
         with self._c() as c:
             c.execute("BEGIN IMMEDIATE")
-            loc = c.execute("SELECT reference_path FROM locations WHERE id=?", (location_id,)).fetchone()
+            loc = c.execute(f"SELECT reference_path FROM locations l WHERE id=? AND {_REAL_LOCATION}", (location_id,)).fetchone()
             if not loc:
                 raise KeyError(f"no location {location_id}")
             n = c.execute("SELECT COUNT(*) FROM inspections").fetchone()[0]
@@ -138,8 +143,9 @@ class Store:
 
     def inspections(self) -> list[dict]:
         with self._c() as c:
-            q = """SELECT i.*, l.name AS location_name FROM inspections i
-                   JOIN locations l ON l.id = i.location_id ORDER BY i.updated_at DESC"""
+            q = f"""SELECT i.*, l.name AS location_name FROM inspections i
+                    JOIN locations l ON l.id = i.location_id
+                    WHERE {_REAL_LOCATION} ORDER BY i.updated_at DESC"""
             return [dict(r) for r in c.execute(q)]
 
     # ---------- captures + results ----------
@@ -181,7 +187,11 @@ class Store:
             if not ins:
                 return None
             ins = dict(ins)
-            loc = _loc(c.execute("SELECT * FROM locations WHERE id=?", (ins["location_id"],)).fetchone())
+            location = c.execute(f"SELECT * FROM locations l WHERE id=? AND {_REAL_LOCATION}",
+                                 (ins["location_id"],)).fetchone()
+            if not location:
+                return None
+            loc = _loc(location)
             caps = {}
             for r in c.execute("SELECT * FROM captures WHERE inspection_id=? ORDER BY id", (inspection_id,)):
                 cap = dict(r)
