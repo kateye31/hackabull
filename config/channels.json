@@ -1,9 +1,9 @@
 {
-  "_instructions": "Person 3: fill in the official campus channel for reporting blocked walkways (facilities work request, accessibility office, etc.). Copy the URL/email from the university's own website, then set verified to true and record who checked it and when. The app will not show a channel as verified until you do.",
+  "_instructions": "Person 3: fill in the city's official channel for reporting blocked sidewalks (311 service request, public works / sidewalk repair, ADA coordinator, etc.). Copy the URL/email/phone from the city's own website, then set verified to true and record who checked it and when. The app will not show a channel as verified until you do.",
   "channels": [
     {
-      "id": "facilities",
-      "name": "Campus facilities work request",
+      "id": "city311",
+      "name": "City 311 service request",
       "url": "",
       "email": "",
       "phone": "",
@@ -13,8 +13,8 @@
       "verified_on": ""
     },
     {
-      "id": "accessibility",
-      "name": "Campus accessibility office",
+      "id": "ada",
+      "name": "City ADA coordinator",
       "url": "",
       "email": "",
       "phone": "",

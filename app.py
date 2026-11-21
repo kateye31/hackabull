@@ -1,4 +1,4 @@
-"""ClearPath: document a blocked campus walkway, review it, report it, confirm the fix.
+"""ClearPath: document a blocked neighborhood sidewalk, review it, report it, confirm the fix.
 
     streamlit run app.py
 
@@ -117,11 +117,11 @@ def show_observation(obs: dict | None):
 # ---------------------------------------------------------------- pages
 def page_locations():
     st.header("Locations")
-    st.write("Each location needs one photo of the walkway when it's **clear**. Every inspection there is compared "
-             "against it, so take it from a spot you can find again (e.g. standing at a door or a lamp post).")
+    st.write("Each location needs one photo of the sidewalk when it's **clear**. Every inspection there is compared "
+             "against it, so take it from a spot you can find again (e.g. standing at a curb ramp, a hydrant or a street sign).")
     with st.form("new_loc", clear_on_submit=True):
-        name = st.text_input("Location name", placeholder="e.g. Library north ramp")
-        desc = st.text_input("Where exactly / how to stand", placeholder="Facing south from the ramp's top landing")
+        name = st.text_input("Location name", placeholder="e.g. Oak St & 3rd, northeast corner")
+        desc = st.text_input("Where exactly / how to stand", placeholder="Toes on the curb ramp, facing north up Oak St")
         src = st.radio("Reference photo", ["Camera", "Upload"], horizontal=True)
         f = st.camera_input("Clear-path photo") if src == "Camera" else st.file_uploader("Clear-path photo", type=["jpg", "jpeg", "png", "webp"])
         if st.form_submit_button("Add location", type="primary"):
@@ -200,9 +200,9 @@ def page_inspect():
     with st.form(f"review_{iid}"):
         t = st.selectbox("What is blocking the path?", OBSTRUCTION_TYPES, index=OBSTRUCTION_TYPES.index(default_type))
         sev = st.radio("How bad is it?", SEVERITIES, index=SEVERITIES.index(prev["severity"]) if prev.get("severity") in SEVERITIES else 0)
-        desc = st.text_area("Description for facilities", value=default_desc, height=110,
+        desc = st.text_area("Description for the city", value=default_desc, height=110,
                             help="Pre-filled from the AI observations when available. Edit so it's accurate.")
-        note = st.text_input("Exact spot", value=prev.get("location_note", ""), placeholder="e.g. bottom of the ramp, east side")
+        note = st.text_input("Exact spot", value=prev.get("location_note", ""), placeholder="e.g. in front of 412 Oak St, by the bus shelter")
         who = st.text_input("Your name", value=prev.get("reviewer", ""))
         ok = st.checkbox("I looked at the photos and these details are accurate.", value=bool(prev.get("confirmed")))
         c1, c2 = st.columns(2)
@@ -232,8 +232,8 @@ def page_inspect():
         channel = vch[names.index(st.selectbox("Send to", names))]
         st.caption(f"Verified by {channel['verified_by']} on {channel['verified_on']} · {channels.contact_line(channel)}")
     else:
-        st.warning("No verified campus reporting channel yet. Person 3: fill in config/channels.json from the "
-                   "university's official website and mark it verified.")
+        st.warning("No verified city reporting channel yet. Person 3: fill in config/channels.json from the "
+                   "city's official website (311 / public works) and mark it verified.")
     key = f"report_text_{iid}"
     if key not in st.session_state:
         st.session_state[key] = (b["report"] or {}).get("text") or report.draft_text(b, channel)
@@ -304,7 +304,7 @@ def _open(iid: str):
 # ---------------------------------------------------------------- layout
 with st.sidebar:
     st.title("ClearPath")
-    st.caption("Report blocked campus walkways and confirm they get fixed.")
+    st.caption("Report blocked neighborhood sidewalks and confirm they get fixed.")
     page = st.radio("Page", ["Inspect", "Locations", "All inspections"], key="page", label_visibility="collapsed")
     st.divider()
     method = vision_ready()

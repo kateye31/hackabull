@@ -30,7 +30,7 @@ def draft_text(bundle: dict, channel: dict | None = None) -> str:
     initial = bundle.get("initial") or {}
     comp = initial.get("comparison") or {}
     lines = [
-        f"Subject: Blocked walkway at {loc['name']} ({ins['id']})",
+        f"Subject: Blocked sidewalk at {loc['name']} ({ins['id']})",
         "",
         f"Location: {loc['name']}" + (f" ({review['location_note']})" if review.get("location_note") else ""),
         f"What is blocking it: {review['obstruction_type']}",
@@ -92,7 +92,7 @@ def render_html(bundle: dict, text: str, channel: dict | None = None) -> str:
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{esc(ins['id'])} · Blocked walkway report</title>
+<title>{esc(ins['id'])} · Blocked sidewalk report</title>
 <style>
   body {{ font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color: #1b1f23; max-width: 820px; margin: 24px auto; padding: 0 16px; }}
   h1 {{ font-size: 22px; margin: 0 0 4px; }}
@@ -107,7 +107,7 @@ def render_html(bundle: dict, text: str, channel: dict | None = None) -> str:
   @media print {{ body {{ margin: 0; max-width: none; }} .noprint {{ display: none; }} }}
 </style></head>
 <body>
-  <h1>Blocked walkway: {esc(loc['name'])}</h1>
+  <h1>Blocked sidewalk: {esc(loc['name'])}</h1>
   <p class="meta">{esc(ins['id'])} · status: {esc(STATUS_LABELS.get(ins['status'], ins['status']))}</p>
   {ch}
   <pre>{esc(text)}</pre>

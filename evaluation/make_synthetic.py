@@ -1,4 +1,4 @@
-"""Make synthetic reference/capture pairs of a campus walkway for testing and evaluation.
+"""Make synthetic reference/capture pairs of a neighborhood sidewalk for testing and evaluation.
 
 Each pair is a clear-path reference plus a later capture that is either
   * clear      - same path, but different light, a shadow, a slightly different

@@ -67,10 +67,12 @@ def check_vision():
         line(WARN, "DINOv2 loads", f"falling back to the OpenCV baseline. {reason}")
         method = "opencv"
 
-    rng = np.random.default_rng(11)
+    from .demo import SPOTS
+    _, kind, seed_ = SPOTS[0]  # same pair as the first demo location
+    rng = np.random.default_rng(seed_)
     base, path = scene(rng)
     blocked = base.copy()
-    obstacle(blocked, rng, path, "cone")
+    obstacle(blocked, rng, path, kind)
     d = Path(tempfile.mkdtemp(prefix="clearpath-preflight-"))
     imgs = {"ref": np.clip(base, 0, 255).astype(np.uint8), "blocked": recapture(blocked, rng, hard=False),
             "clear": recapture(base, rng, hard=False)}
@@ -156,7 +158,7 @@ def check_locations():
         real += bool(has) and not synthetic
         line(OK, f"location '{l['name']}'", "backup demo photos: " + (", ".join(has) if has else "none (camera/upload only)"))
     if not real:
-        line(WARN, "real-photo backup run", 'no real campus location with demo photos yet; '
+        line(WARN, "real-photo backup run", 'no real neighborhood location with demo photos yet; '
              'python -m clearpath.demo real "<name>" <folder>')
 
 

@@ -133,19 +133,19 @@ class RealDemoPhotos(unittest.TestCase):
         eval_root = _TMP / "eval-real"
         demo.EVAL_REAL, old = eval_root, demo.EVAL_REAL
         try:
-            loc_id = demo.add_real("Library ramp / east", shoot, "Top landing, facing south", s, to_eval=True)
+            loc_id = demo.add_real("Oak St & 3rd / NE", shoot, "Curb ramp, facing north", s, to_eval=True)
         finally:
             demo.EVAL_REAL = old
         loc = s.location(loc_id)
-        self.assertIn("Top landing", loc["description"])
+        self.assertIn("Curb ramp", loc["description"])
         self.assertTrue(demo.demo_photo(loc["reference_path"], "initial"))
         self.assertTrue(demo.demo_photo(loc["reference_path"], "follow_up"))
         labels = (eval_root / "labels.csv").read_text().splitlines()
-        self.assertIn("library-ramp---east-blocked,obstructed,,", labels)
-        self.assertIn("library-ramp---east-cleared,clear,,", labels)
-        self.assertTrue((eval_root / "library-ramp---east-blocked" / "capture.jpg").exists())
+        self.assertIn("oak-st---3rd---ne-blocked,obstructed,,", labels)
+        self.assertIn("oak-st---3rd---ne-cleared,clear,,", labels)
+        self.assertTrue((eval_root / "oak-st---3rd---ne-blocked" / "capture.jpg").exists())
         with self.assertRaises(ValueError):
-            demo.add_real("Library ramp / east", shoot, store=s)
+            demo.add_real("Oak St & 3rd / NE", shoot, store=s)
 
     def test_missing_blocked_photo(self):
 
@@ -166,7 +166,7 @@ class AppFlow(unittest.TestCase):
         next(b for b in at.button if b.label == "Start inspection").click().run()
         next(b for b in at.button if b.label == "Check this photo").click().run()
         self.assertFalse(at.exception)
-        at.text_area[0].set_value("Scooter lying across the walkway.")
+        at.text_area[0].set_value("Scooter lying across the sidewalk.")
         next(t for t in at.text_input if t.label == "Your name").set_value("Tester")
         at.checkbox[0].check()
         next(b for b in at.button if b.label == "Confirm details").click().run()

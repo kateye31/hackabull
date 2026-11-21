@@ -1,12 +1,12 @@
 # ClearPath
 
-Document a blocked campus walkway, get it to the right office, and confirm it got fixed.
+Document a blocked neighborhood sidewalk, get it to the right city office, and confirm it got fixed.
 
-1. **Capture.** Take a photo of the blocked path with a webcam or phone.
+1. **Capture.** Take a photo of the blocked sidewalk with a webcam or phone.
 2. **Compare.** The photo is compared against a *clear-path reference* photo of the same spot (DINOv2, with an OpenCV baseline), and the changed area is highlighted.
 3. **Describe.** Gemini drafts observations: what's blocking it, the accessibility impact, and a suggested action.
 4. **Review.** A person checks the photos and confirms or edits the details. Nothing goes out unconfirmed.
-5. **Report.** An editable report, plus a printable HTML export, goes to a **verified** campus reporting channel.
+5. **Report.** An editable report, plus a printable HTML export, goes to a **verified** city reporting channel (311, public works).
 6. **Follow up.** A later photo is compared against the **same** reference, and the reviewer marks it resolved or still blocked.
 
 ## Quick start
@@ -28,7 +28,7 @@ Tests: `python -m unittest -v`
 | --- | --- | --- | --- |
 | **1. Capture and demo** | Webcam, Streamlit workflow, human review and resolution | Gives Person 2 a saved image with its inspection ID and phase. Integrates everyone's modules into `app.py`. | `capture-demo` |
 | **2. Vision and data** | DINOv2, OpenCV baseline, SQLite, evaluation | Returns the comparison result and overlay. Keeps initial and follow-up captures linked to the same clear-path reference. | `vision-data` |
-| **3. Gemini and reporting** | AI observations, verified campus reporting channel, editable report, export | Takes saved evidence and reviewer-confirmed details; returns report text and printable HTML. | `gemini-reporting` |
+| **3. Gemini and reporting** | AI observations, verified city reporting channel, editable report, export | Takes saved evidence and reviewer-confirmed details; returns report text and printable HTML. | `gemini-reporting` |
 
 Checklists per person: [docs/PLAN.md](docs/PLAN.md). The hand-off types live in [clearpath/contracts.py](clearpath/contracts.py). Change them together.
 
@@ -36,7 +36,7 @@ Checklists per person: [docs/PLAN.md](docs/PLAN.md). The hand-off types live in 
 | --- | --- | --- |
 | [app.py](app.py) | 1 | Streamlit app: locations, inspect flow, review form, report, follow-up |
 | [clearpath/capture.py](clearpath/capture.py) | 1 | Saves webcam/upload photos as `SavedCapture` (fixes rotation, strips EXIF/GPS) |
-| [clearpath/demo.py](clearpath/demo.py) | 1 | Demo walkways so the app runs without a camera; `demo real` imports your own campus photos as a backup run |
+| [clearpath/demo.py](clearpath/demo.py) | 1 | Demo sidewalks so the app runs without a camera; `demo real` imports your own neighborhood photos as a backup run |
 | [clearpath/preflight.py](clearpath/preflight.py) | 1 | `python -m clearpath.preflight`: checks the demo laptop (DINOv2 cached, camera, Gemini, channels, photos) |
 | [docs/DEMO.md](docs/DEMO.md) | 1 | Photo shoot, room check, demo script and backup plan |
 | [clearpath/vision/](clearpath/vision/) | 2 | `compare()` → `ComparisonResult`: alignment, DINOv2 patch comparison, OpenCV baseline, overlay |
@@ -62,11 +62,11 @@ Checklists per person: [docs/PLAN.md](docs/PLAN.md). The hand-off types live in 
 | OpenCV baseline | 55% | 58% | 35% | 5 of 10 | 0.63 |
 | DINOv2 | 78% | 87% | 65% | 2 of 10 | 0.81 |
 
-These are synthetic drawings, not photos, so the thresholds in [clearpath/vision/\_\_init\_\_.py](clearpath/vision/__init__.py) were set from them. **Re-tune them on real campus pairs** (same folder layout, `data/eval/real/<pair>/reference.jpg`, `capture.jpg`, plus `labels.csv`) and report those numbers instead.
+These are synthetic drawings, not photos, so the thresholds in [clearpath/vision/\_\_init\_\_.py](clearpath/vision/__init__.py) were set from them. **Re-tune them on real neighborhood pairs** (same folder layout, `data/eval/real/<pair>/reference.jpg`, `capture.jpg`, plus `labels.csv`) and report those numbers instead.
 
 ## Verified reporting channel
 
-[config/channels.json](config/channels.json) ships empty on purpose. Person 3 copies the official contact (URL, email or phone) from the university's own website, records `source_page`, `verified_by` and `verified_on`, and sets `verified: true`. Until then, the app warns that no verified channel exists and labels anything sent as "channel not verified."
+[config/channels.json](config/channels.json) ships empty on purpose. Person 3 copies the official contact (URL, email or phone) from the city's own website, records `source_page`, `verified_by` and `verified_on`, and sets `verified: true`. Until then, the app warns that no verified channel exists and labels anything sent as "channel not verified."
 
 ## Limits
 

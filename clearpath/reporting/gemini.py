@@ -17,21 +17,21 @@ from pydantic import BaseModel, Field
 from .. import config
 from ..contracts import OBSTRUCTION_TYPES
 
-PROMPT = """You are helping a campus accessibility inspector.
+PROMPT = """You are helping a neighborhood sidewalk accessibility inspector.
 
-Image 1 is a reference photo of a walkway when it was clear.
-Image 2 is a new photo of the same walkway.
+Image 1 is a reference photo of a sidewalk when it was clear.
+Image 2 is a new photo of the same sidewalk.
 {vision_hint}
 
-Compare them and describe what, if anything, now blocks or narrows the walkway.
+Compare them and describe what, if anything, now blocks or narrows the sidewalk.
 Rules:
 - Describe only what is visible. If unsure, say so and lower your confidence.
 - Ignore differences in lighting, shadows, weather and camera angle.
 - Do not identify or describe people, faces or licence plates.
 - obstruction_type must be one of: {types}, or "None" if the path is clear.
-- observations: 2-5 short factual sentences a facilities worker can act on.
+- observations: 2-5 short factual sentences a city public works crew can act on.
 - accessibility_impact: one sentence on how this affects someone using a wheelchair, cane or stroller.
-- suggested_action: one sentence on what facilities should do.
+- suggested_action: one sentence on what the city should do.
 """
 
 

@@ -1,15 +1,15 @@
 """Demo locations so the app works with no webcam (Person 1).
 
-    python -m clearpath.demo                    # three synthetic walkways
-    python -m clearpath.demo real "Library north ramp" photos/library --where "Top landing, facing south"
-    python -m clearpath.demo real "Library north ramp" photos/library --eval   # also give Person 2 the pairs
+    python -m clearpath.demo                    # three synthetic sidewalks
+    python -m clearpath.demo real "Oak St & 3rd" photos/oak-3rd --where "Toes on the curb ramp, facing north"
+    python -m clearpath.demo real "Oak St & 3rd" photos/oak-3rd --eval   # also give Person 2 the pairs
     python -m clearpath.demo list
 
-Synthetic: creates three walkways under data/demo/<slug>/ with reference.jpg (clear),
+Synthetic: creates three sidewalks under data/demo/<slug>/ with reference.jpg (clear),
 initial.jpg (blocked), followup.jpg (clear again, different light/angle).
 
-Real: takes a folder of your own campus photos named
-    reference.*   the walkway when it's clear          (required)
+Real: takes a folder of your own neighborhood photos named
+    reference.*   the sidewalk when it's clear          (required)
     blocked.*     the same spot with something in the way (required)
     cleared.*     the same spot clear again, later      (optional)
 (.jpg/.jpeg/.png/.webp), re-encodes them (rotation fixed, EXIF/GPS removed) into
@@ -34,9 +34,10 @@ from .store import Store
 DEMO = config.DATA / "demo"
 EVAL_REAL = config.DATA / "eval" / "real"
 SPOTS = [
-    ("Library north ramp", "cone", 11),
-    ("Engineering walkway", "scooter", 23),
-    ("Student union side path", "barrier", 37),
+    # seeds picked so DINOv2 says obstructed on the blocked photo and clear on the follow-up
+    ("Oak Street sidewalk", "scooter", 23),        # OpenCV baseline misses this one: good for the pitch
+    ("Maple Avenue curb ramp", "barrier", 19),
+    ("5th Avenue bus stop", "scooter", 21),
 ]
 IMAGE_EXT = (".jpg", ".jpeg", ".png", ".webp")
 # output file in data/demo/<slug>/  ->  accepted input names (without extension)
@@ -75,7 +76,7 @@ def seed(store: Store | None = None) -> int:
         for fname, img in (("reference.jpg", ref), ("initial.jpg", recapture(blocked, rng, hard=False)),
                            ("followup.jpg", recapture(base, rng, hard=False))):
             cv2.imwrite(str(d / fname), cv2.cvtColor(img, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 90])
-        store.add_location(name, d / "reference.jpg", f"Demo walkway (synthetic). Expected obstruction: {kind}.")
+        store.add_location(name, d / "reference.jpg", f"Demo sidewalk (synthetic). Expected obstruction: {kind}.")
         made += 1
     return made
 
@@ -96,7 +97,7 @@ def _find(folder: Path, stems: tuple[str, ...]) -> Path | None:
 
 def add_real(name: str, folder: str | Path, where: str = "", store: Store | None = None,
              to_eval: bool = False) -> int:
-    """Register a location from your own campus photos. Returns the new location id."""
+    """Register a location from your own neighborhood photos. Returns the new location id."""
     folder = Path(folder)
     if not folder.is_dir():
         raise FileNotFoundError(f"{folder} is not a folder")
@@ -149,7 +150,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="python -m clearpath.demo", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd")
     r = sub.add_parser("real", help="add a location from your own photos (reference, blocked, cleared)")
-    r.add_argument("name", help='location name as it should appear in the app, e.g. "Library north ramp"')
+    r.add_argument("name", help='location name as it should appear in the app, e.g. "Oak St & 3rd"')
     r.add_argument("folder", help="folder holding reference.jpg, blocked.jpg and optionally cleared.jpg")
     r.add_argument("--where", default="", help="where you stood, so anyone can retake it from the same spot")
     r.add_argument("--eval", action="store_true", help="also copy the pairs to data/eval/real/ for Person 2")
