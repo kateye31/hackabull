@@ -1,0 +1,18 @@
+{
+  "name": "Estero, Hurricane Ian imagery comparison",
+  "bounds": [
+    [
+      26.426308999847006,
+      -81.82342529296875
+    ],
+    [
+      26.428768558415,
+      -81.8206787109375
+    ]
+  ],
+  "gsd_m": 1.069514499948638,
+  "before_source": "https://gissvr4.leepa.org/gissvr/rest/services/AP2021Pict/MapServer/export?bbox=-9108542.038574744,3051977.6653705174,-9108236.290461602,3052283.4134836583&bboxSR=3857&imageSR=3857&size=256,256&format=jpg&layers=show:1&f=image",
+  "after_sources": [
+    "https://stormscdn.ngs.noaa.gov/20220930d-rgb/17/35745/55553"
+  ]
+}
