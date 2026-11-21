@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ReTrace · Report flooding</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="resident">
+  <main class="report">
+    <header>
+      <div class="brand"><span class="logo" aria-hidden="true"></span>ReTrace</div>
+      <h1>Report flooding on your street</h1>
+      <p class="muted">Your report goes straight to recovery crews. If someone is in danger, call 911 first.</p>
+    </header>
+
+    <form id="form" novalidate>
+      <fieldset>
+        <legend>1. Where is it?</legend>
+        <div id="pinmap" class="pinmap" aria-label="Tap the map to drop a pin"></div>
+        <div class="inline">
+          <button type="button" class="btn ghost" id="locate">Use my location</button>
+          <span class="muted" id="pinlabel">Tap the map to drop a pin.</span>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>2. What do you see?</legend>
+        <div class="seg" data-name="category">
+          <label><input type="radio" name="category" value="flooded_road" required><span>Water on the road</span></label>
+          <label><input type="radio" name="category" value="flooded_building"><span>Water in or at a building</span></label>
+          <label><input type="radio" name="category" value="standing_water"><span>Standing water</span></label>
+          <label><input type="radio" name="category" value="debris"><span>Debris</span></label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>3. How deep does it look?</legend>
+        <div class="seg depth">
+          <label><input type="radio" name="depth" value="ankle"><span>Ankle</span></label>
+          <label><input type="radio" name="depth" value="knee"><span>Knee</span></label>
+          <label><input type="radio" name="depth" value="waist"><span>Waist</span></label>
+          <label><input type="radio" name="depth" value="above_tire"><span>Above a car tire</span></label>
+        </div>
+        <div class="seg two">
+          <label><input type="radio" name="flow" value="moving"><span>Moving</span></label>
+          <label><input type="radio" name="flow" value="still"><span>Still</span></label>
+        </div>
+        <label class="check"><input type="checkbox" name="blocks_road"> It blocks the road</label>
+      </fieldset>
+
+      <fieldset>
+        <legend>4. Photo <span class="muted">(optional)</span></legend>
+        <input type="file" name="photo" accept="image/*" capture="environment" id="photo">
+        <img id="preview" alt="" hidden>
+        <label for="note" class="sr-only">Anything else?</label>
+        <textarea name="note" id="note" rows="2" maxlength="500" placeholder="Anything else? e.g. elderly neighbor, no power"></textarea>
+      </fieldset>
+
+      <p class="error" id="error" role="alert" hidden></p>
+      <button class="btn primary big" type="submit" id="submit">Send report</button>
+    </form>
+
+    <section id="done" class="done" hidden>
+      <h2>Thanks — crews can see it now.</h2>
+      <p>Report <b id="doneid"></b> is on the crew map as <b id="donecat"></b>, priority <b id="donepri"></b>.</p>
+      <button class="btn" id="again">Send another report</button>
+    </section>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="/static/common.js"></script>
+  <script src="/static/report.js"></script>
+</body>
+</html>
