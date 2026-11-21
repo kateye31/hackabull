@@ -1,0 +1,27 @@
+{
+  "_instructions": "Person 3: fill in the official campus channel for reporting blocked walkways (facilities work request, accessibility office, etc.). Copy the URL/email from the university's own website, then set verified to true and record who checked it and when. The app will not show a channel as verified until you do.",
+  "channels": [
+    {
+      "id": "facilities",
+      "name": "Campus facilities work request",
+      "url": "",
+      "email": "",
+      "phone": "",
+      "source_page": "",
+      "verified": false,
+      "verified_by": "",
+      "verified_on": ""
+    },
+    {
+      "id": "accessibility",
+      "name": "Campus accessibility office",
+      "url": "",
+      "email": "",
+      "phone": "",
+      "source_page": "",
+      "verified": false,
+      "verified_by": "",
+      "verified_on": ""
+    }
+  ]
+}
