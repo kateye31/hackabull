@@ -41,10 +41,11 @@ Do this on the actual demo laptop, on the room's Wi-Fi, with the browser closed 
 
 ```bash
 python -m clearpath.preflight            # add --gemini once Person 3 has a key
-streamlit run app.py
+streamlit run app.py                     # reviewer:  http://localhost:8501
+uvicorn api.main:app --port 8000         # residents: http://localhost:8000
 ```
 
-The preflight checks packages, that the data folder is writable, that DINOv2 is **already downloaded** (so the demo doesn't depend on venue Wi-Fi), the camera, Gemini, verified channels, and that every location's photos exist on this laptop. Exit code 0 means nothing will break; read the warnings anyway.
+The preflight checks packages, that the data folder is writable, that DINOv2, CLIP, SegFormer and RemoteCLIP are **already downloaded** (so the demo doesn't depend on venue Wi-Fi), the USGS imagery and OpenStreetMap services, the camera, Gemini, verified channels, and that every location's photos exist on this laptop. Add the demo locations **before** the event: that fetches the satellite images and the nearby-help lookup (about 45 s, once) and caches them. Exit code 0 means nothing will break; read the warnings anyway.
 
 Then in the browser:
 
@@ -57,25 +58,25 @@ Then in the browser:
 
 ## 3. Demo script (about 3 minutes)
 
-Two roles, two pages: **residents** send photos on *Report damage*; **the reviewer** works the *Review queue*. Before you start, finish two reports (one *Cleared*, one *Awaiting cleanup*) so the queue looks like a real neighborhood after a storm. Open on **Report damage**, sidebar visible.
+Two websites, one database: **residents** use the residents' site (localhost:8000, the hi-vis one; open it in a phone-sized browser window), **the reviewer** works the Streamlit app (localhost:8501). Before you start, finish two reports (one *Cleared*, one *Awaiting cleanup*) so the queue looks real.
 
 | Time | Do | Say |
 | --- | --- | --- |
-| 0:00 | Locations page, point at a before-storm photo | "Before hurricane season, a neighborhood photographs the routes people depend on: the sidewalk to the bus stop, the curb ramps, the walkway to the community center." |
-| 0:20 | **Report damage** → a real location (or Demo table) → camera/Demo photo → type a short note → **Send report** | "The storm passes. A neighbor goes back to the same spot and sends one photo. That's all they do: no account, no form." Point at the 911 power-line warning. |
-| 0:35 | Switch to **Review queue** → the new report under *Needs review* → **Open** | "On the other side, a neighborhood reviewer sees every report in one queue." |
-| 0:40 | Point at before / after / highlighted | "DINOv2 compares the two photos patch by patch and outlines what's new. Shadows and lighting changes mostly don't trip it; a debris pile does." Open **Comparison details**: "A pixel-diff baseline runs too, and here it misses it." (Bayview Avenue curb ramp shows this: DINOv2 *obstructed*, OpenCV *clear*.) |
-| 1:10 | AI observations (if Gemini is on) | "Gemini drafts what it sees and who can't get through: wheelchair users, strollers, cars. It's labeled a draft. And if it sees a downed line, the app tells you to stay away and call 911 first." |
-| 1:30 | Fill the review form, tick the box, **Confirm details** | "A person picks the damage type and how bad it is, and signs off. Nothing goes out unconfirmed." |
-| 1:50 | Report: editable text, **Download printable report**, **Mark as sent** | "It goes to the verified storm-debris line with the photos attached, so the crew knows exactly what to bring." |
-| 2:20 | After cleanup: cleared photo → **Confirm cleared** | "After the crew comes, same spot, same before-storm photo. It's clear, so the route is open again. If not, it goes back as still blocked." |
-| 2:40 | **Back to queue** | "Every route in the neighborhood: needs review, ready to report, awaiting cleanup, closed. A recovery map built one photo at a time." |
+| 0:00 | Reviewer app → **Before-storm photos**: the map, one spot's photo and its satellite tile, "tree canopy 35%, storm risk high" | "Before hurricane season, a neighborhood photographs the routes people depend on. We pull the satellite view of each one and measure the tree canopy over it: that's where the storm will hit first." |
+| 0:25 | Residents' site → photo (Demo photo or camera) → pick the spot or **Use my location** → note → **Send report** | "After the storm, a neighbor sends one photo. No account. Their phone's GPS puts it on the right spot." Point at the 911 power-line notice. Then the thank-you screen: "And they immediately get help near them: the nearest shelter, hospital, hardware store, with phone numbers." |
+| 0:55 | Reviewer app → **Review queue** → *Needs review* → **Open** | "The reviewer sees every report in one queue, with the resident's note." |
+| 1:05 | Before / after / highlighted, then **Damage analysis** | "DINOv2 finds what's new. SegFormer finds the walkway in the before photo, so we can measure: 38% of the walkway blocked, narrowest clear width 25%. CLIP suggests the kind of damage." Hover a metric to show the equation. |
+| 1:30 | **Response plan** + nearby table | "From that, a plan: crew, equipment, steps, safety, and the real contractors nearby to call, from OpenStreetMap. With a Gemini key, Gemini plans it as an agent and looks up the contractors itself." |
+| 1:50 | **From above: satellite check** (after using **Demo: synthetic damage** on that spot beforehand) | "From above, before vs after. This after image is synthetic for the demo; after a real storm it's NOAA's aerial survey or a drone." |
+| 2:05 | Confirm details → **Mark as sent** | "A person signs off. Nothing goes out unconfirmed." |
+| 2:20 | After cleanup: cleared photo → **Confirm cleared** | "Same spot, same before-storm photo: clear, so the route is open again." |
+| 2:40 | **Back to queue** | "Every route in the neighborhood and whether it's passable. A recovery map built one photo at a time." |
 
 Demo locations:
 
-- **Your real staged locations** first. They're the strongest evidence.
-- **Bayview Avenue curb ramp** (synthetic debris pile): best for showing DINOv2 beating the baseline.
-- **Palm Street sidewalk** (fallen tree), **Walkway to the community center** (branches), **5th Avenue bus stop** (flooding): all come out *Obstructed*, then *Clear* after cleanup. Use one to show it's not just flooding.
+- **Your real staged locations** first. They're the strongest evidence, and the damage-type suggestions only work well on real photos.
+- **Bayview Avenue curb ramp** (synthetic debris pile): DINOv2 *obstructed*, pixel baseline *clear*.
+- The synthetic routes are cartoons: skip the "Looks like:" damage-type line on them (CLIP guesses wrong on drawings) and point at the walkway numbers instead.
 
 ## 4. Backup plan
 
@@ -85,7 +86,8 @@ If anything goes wrong live, switch the photo source to **Demo photo** on a real
 | --- | --- |
 | Camera black or "in use" | Close Teams/Zoom, or switch to **Demo photo** |
 | Gemini slow or fails | It falls back to "No AI observations"; fill the form by hand and say "we never depend on the AI" (fitting: after a storm the network is often down) |
-| Wi-Fi down | DINOv2 is cached (preflight checked), so only Gemini is affected |
+| Wi-Fi down | Models, satellite images and nearby help are cached (preflight + demo locations added beforehand), so only Gemini is affected |
+| Residents' site won't load | Use the reviewer app's **Report damage** page instead: same flow |
 | App crashes | `Ctrl+C`, `streamlit run app.py` again; reports are saved in SQLite, so reopen from the **Review queue** |
 
 Rehearse the whole script twice: once with the camera, once on the backup path only. Time both.
