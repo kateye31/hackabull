@@ -12,9 +12,13 @@ from pathlib import Path
 
 import streamlit as st
 
-from clearpath import capture, config, demo, vision
+import os
+
+from clearpath import capture, config, demo, geo, pipeline, vision
+from clearpath.vision import aerial
 from clearpath.contracts import (HAZARD_TYPES, OBSTRUCTION_TYPES, PHASE_LABELS, SEVERITIES, STATUS_LABELS,
-                                 ComparisonResult, ReviewedDetails)
+                                 ReviewedDetails)
+from clearpath.pipeline import RESIDENT_NOTE
 from clearpath.reporting import channels, gemini, report
 from clearpath.store import Store, now
 
@@ -41,7 +45,7 @@ def vision_ready() -> str:
 
 
 store = get_store()
-RESIDENT_NOTE = "Resident: "  # prefix for the note a resident sends with their photo (kept in the event history)
+RESIDENT_SITE = os.environ.get("CLEARPATH_RESIDENT_URL", "http://localhost:8000")  # api/main.py
 POWER_LINE_WARNING = ("**Downed power line? Stay at least 35 feet (10 m) away and call 911.** "
                       "Don't go closer to take a photo.")
 
@@ -66,18 +70,11 @@ def photo_input(key: str, reference_path: str | None = None, phase: str = "initi
 
 
 def process_capture(inspection_id: str, phase: str, image_bytes: bytes, reference_path: str):
-    """Person 1 -> Person 2 -> Person 3 hand-offs for one photo."""
+    """Save -> compare -> damage analysis -> Gemini -> response plan (clearpath/pipeline.py)."""
     with st.status("Checking the photo…", expanded=True) as s:
         st.write("Saving photo")
-        cap = store.add_capture(capture.save_capture(image_bytes, inspection_id, phase))
-        st.write("Comparing with the before-storm photo")
-        overlay = config.OVERLAYS / inspection_id / f"{phase}_{cap.capture_id}.png"
-        result: ComparisonResult = vision.compare(reference_path, cap.image_path, overlay)
-        store.save_comparison(cap.capture_id, result)
-        if phase == "initial":
-            st.write("Asking Gemini what it sees")
-            obs = gemini.observe(reference_path, cap.image_path, result.to_dict())
-            store.save_observation(cap.capture_id, obs)
+        cap = pipeline.save_photo(store, inspection_id, phase, image_bytes)
+        pipeline.analyse(store, cap, reference_path, progress=st.write)
         s.update(label="Photo checked", state="complete")
 
 
@@ -100,6 +97,64 @@ def show_comparison(bundle: dict, phase: str):
         st.table(rows)
         if d.get("fallback"):
             st.caption(d["fallback"])
+
+
+def show_damage(comp: dict):
+    """CLIP damage type + SegFormer walkway equations (clearpath/vision/ml.py)."""
+    dmg = comp.get("details", {}).get("damage")
+    if not dmg:
+        return
+    if dmg.get("available") is False:
+        st.caption(f"Damage analysis off: {dmg.get('reason', '')[:160]}")
+        return
+    st.markdown("**Damage analysis** · *machine suggestions for the reviewer*")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Walkway blocked", f"{dmg['blocked_share']:.0%}", help="B = |walkway before ∩ changed| / |walkway before|")
+    c2.metric("Narrowest clear width", f"{dmg['narrowest_clear_width']:.0%}",
+              help="10th percentile, over rows near the camera, of the share of each row's walkway still clear")
+    c3.metric("Damage index", f"{dmg['damage_index']:.0f} / 100", help="DI = 100 · B · weight of the damage type")
+    c4.metric("Suggested severity", dmg["suggested_severity"].split(":")[0])
+    if dmg.get("suggestions"):
+        st.caption("Looks like: " + " · ".join(f"{x['type']} ({x['score']:.0%})" for x in dmg["suggestions"]
+                                               if x["type"] != "None") + f" · {dmg['models']['classifier']}")
+    if dmg.get("note"):
+        st.caption(dmg["note"])
+
+
+def show_plan(bundle: dict):
+    pl = bundle.get("plan")
+    if not pl:
+        return
+    plan = pl["plan"]
+    src = f"Gemini {pl['model']} with map tools" if pl["source"] == "gemini" else "rules (no Gemini key)"
+    st.markdown(f"**Response plan** · priority **{plan['priority']}** · *draft from {src}*")
+    st.write(plan["summary"])
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown(f"**Crew:** {plan['crew']}")
+        if plan["equipment"]:
+            st.markdown("**Bring:** " + ", ".join(plan["equipment"]))
+        for i, step in enumerate(plan["steps"], 1):
+            st.write(f"{i}. {step}")
+    with c2:
+        for line in plan["safety"]:
+            st.warning(line)
+    near = pl.get("nearby", {})
+    st.markdown("**Nearby help** · from OpenStreetMap")
+    if not near.get("available"):
+        st.caption(near.get("reason", "No map data."))
+        return
+    rows = []
+    for cat, places in near["by_category"].items():
+        for x in places:
+            rows.append({"Need": near["labels"][cat], "Name": x["name"], "Distance": f"{x['distance_m'] / 1609.34:.1f} mi",
+                         "Phone": x["phone"] or "", "Map": x["osm_url"]})
+    if rows:
+        st.dataframe(rows, hide_index=True, width="stretch",
+                     column_config={"Map": st.column_config.LinkColumn("Map", display_text="open")})
+    else:
+        st.caption("Nothing mapped nearby for these needs.")
+    st.caption(f"Map data © {near['source']}. A place missing here may still exist; OpenStreetMap coverage varies.")
 
 
 def show_observation(obs: dict | None):
@@ -128,25 +183,94 @@ def page_locations():
     with st.form("new_loc", clear_on_submit=True):
         name = st.text_input("Location name", placeholder="e.g. Palm St sidewalk to the bus stop")
         desc = st.text_input("Where exactly / how to stand", placeholder="Next to the hydrant, facing the bus shelter")
+        addr = st.text_input("Address or lat, lon (optional)", placeholder="e.g. 4210 N Palm St, Tampa FL  or  28.0006, -82.4594",
+                             help="Used for the satellite view, matching residents' GPS, and finding help nearby. "
+                                  "Left empty, the photo's own GPS is used if it has one.")
         src = st.radio("Before-storm photo", ["Camera", "Upload"], horizontal=True)
         f = st.camera_input("Before-storm photo") if src == "Camera" else st.file_uploader("Before-storm photo", type=["jpg", "jpeg", "png", "webp"])
         if st.form_submit_button("Add location", type="primary"):
             if not name.strip() or not f:
                 st.error("Add a name and a before-storm photo.")
             else:
-                ref = capture.save_reference(f.getvalue(), name)
-                store.add_location(name, ref, desc)
-                st.success(f"Added {name}.")
+                data = f.getvalue()
+                point = _parse_point(addr) or geo.exif_gps(data)
+                ref = capture.save_reference(data, name)
+                loc_id = store.add_location(name, ref, desc)
+                if point:
+                    with st.spinner("Fetching the satellite view…"):
+                        pipeline.add_geo(store, loc_id, *point)
+                st.success(f"Added {name}." + ("" if point else " No coordinates: add an address to put it on the map."))
     if st.button("Add demo locations (no camera needed)"):
         n = demo.seed(store)
         st.success(f"Added {n} demo locations." if n else "Demo locations already exist.")
     locs = store.locations()
+    placed = [l for l in locs if l.get("lat") is not None]
+    if placed:
+        st.subheader("Map")
+        st.map([{"lat": l["lat"], "lon": l["lon"]} for l in placed], size=25, zoom=14)
     if locs:
         cols = st.columns(3)
         for i, l in enumerate(locs):
             with cols[i % 3]:
                 st.image(l["reference_path"], width="stretch")
+                if l.get("satellite_path") and Path(l["satellite_path"]).exists():
+                    st.image(l["satellite_path"], caption="Satellite, before the storm (USGS)", width="stretch")
+                risk = geo.tree_risk(l.get("canopy"))
                 st.markdown(f"**{l['name']}**  \n{l['description'] or ''}")
+                if l.get("canopy") is not None:
+                    st.caption(f"Tree canopy nearby: {l['canopy']:.0%} · storm risk **{risk}**")
+                if l.get("satellite_path"):
+                    aerial_controls(l)
+
+
+def aerial_controls(l: dict):
+    """After-storm aerial for one spot: upload (NOAA flight or drone, straight down) or a labelled synthetic demo."""
+    with st.expander("After-storm aerial"):
+        up = st.file_uploader("NOAA post-storm aerial or a drone photo taken straight down",
+                              type=["jpg", "jpeg", "png"], key=f"aerial_up_{l['id']}")
+        c1, c2 = st.columns(2)
+        run = c1.button("Compare", key=f"aerial_go_{l['id']}", disabled=up is None)
+        fake = c2.button("Demo: synthetic damage", key=f"aerial_fake_{l['id']}",
+                         help="Draws storm damage onto the real before-storm tile. Synthetic, for demos only.")
+        if run or fake:
+            data = up.getvalue() if run else demo.synthetic_after_aerial(l["satellite_path"], seed=l["id"])
+            with st.spinner("Comparing from above…"):
+                l["aerial_result"] = pipeline.add_after_aerial(store, l["id"], data, synthetic=bool(fake))
+                l["after_aerial_path"] = str(config.SATELLITE / f"loc{l['id']}_after.jpg")
+        show_aerial(l)
+
+
+def show_aerial(l: dict):
+    res = l.get("aerial_result")
+    if not res:
+        st.caption("No after-storm aerial yet.")
+        return
+    c1, c2, c3 = st.columns(3)
+    c1.image(l["satellite_path"], caption="Before (USGS NAIP)", width="stretch")
+    c2.image(l["after_aerial_path"], caption="After · SYNTHETIC demo damage" if res.get("synthetic")
+             else "After the storm", width="stretch")
+    c3.image(res["overlay_path"], caption="Changed from above", width="stretch")
+    st.markdown(f"{VERDICT_STYLE[res['verdict']]} &nbsp; {res['largest_region']:.0%} of the view in one changed area")
+    if res.get("shift"):
+        up = [(k, v) for k, v in res["shift"].items() if v > 0.05]
+        if up:
+            st.caption("RemoteCLIP, more like after the storm: " + ", ".join(
+                f"{aerial.AERIAL_LABELS[k]} (+{v:.0%})" for k, v in up[:3]))
+    elif res.get("shift_note"):
+        st.caption(res["shift_note"][:160])
+
+
+def _parse_point(text: str):
+    """'lat, lon' or an address -> (lat, lon), or None."""
+    text = (text or "").strip()
+    if not text:
+        return None
+    try:
+        a, b = (float(x) for x in text.split(","))
+        return (a, b) if -90 <= a <= 90 and -180 <= b <= 180 else None
+    except ValueError:
+        hit = geo.geocode(text)
+        return (hit[0], hit[1]) if hit else None
 
 
 def page_report():
@@ -173,10 +297,10 @@ def page_report():
     note = st.text_area("What did you see? (optional)", height=80,
                         placeholder="e.g. a big branch across the sidewalk, no way past with a wheelchair")
     if img and st.button("Send report", type="primary"):
-        iid = store.new_inspection(loc["id"])
-        if note.strip():
-            store.set_status(iid, "captured", RESIDENT_NOTE + note.strip())
-        process_capture(iid, "initial", img, loc["reference_path"])
+        iid, cap = pipeline.new_report(store, loc["id"], img, note)
+        with st.status("Checking the photo…", expanded=True) as s:
+            pipeline.analyse(store, cap, loc["reference_path"], progress=st.write)
+            s.update(label="Photo checked", state="complete")
         st.session_state.submitted = iid
         st.rerun()
 
@@ -242,7 +366,22 @@ def page_review():
             st.rerun()
         return
     show_comparison(b, "initial")
+    show_damage(b["initial"]["comparison"])
     show_observation(b["initial"].get("observation"))
+    with st.expander("From above: satellite check"):
+        dmg_type = (b.get("review") or {}).get("obstruction_type") or (
+            (b["initial"].get("comparison") or {}).get("details", {}).get("damage", {}).get("likely_type"))
+        for n in aerial.consistency(loc, dmg_type):
+            st.write(n)
+        if loc.get("aerial_result"):
+            show_aerial(loc)
+        elif loc.get("satellite_path") and Path(loc["satellite_path"]).exists():
+            st.image(loc["satellite_path"], width=360, caption=f"Before the storm · USGS NAIP · {loc['lat']:.5f}, {loc['lon']:.5f}")
+
+    with st.container(border=True):
+        show_plan(b)
+        if not (b["review"] or {}).get("confirmed"):
+            st.caption("Draft from the photo alone. It updates when you confirm the details below.")
 
     # 2. human review
     st.subheader("2. Review")
@@ -254,11 +393,15 @@ def page_review():
     if obs.get("obstruction_type") in HAZARD_TYPES or prev.get("obstruction_type") in HAZARD_TYPES:
         st.error("**Downed power line: treat it as live.** Stay at least 35 feet (10 m) away, keep others back, and call "
                  "**911** and the power company now. Don't wait for this report.")
-    default_type = prev.get("obstruction_type") or (obs.get("obstruction_type") if obs.get("obstruction_type") in OBSTRUCTION_TYPES else OBSTRUCTION_TYPES[0])
+    dmg = (b["initial"].get("comparison") or {}).get("details", {}).get("damage", {})
+    default_type = (prev.get("obstruction_type")
+                    or (obs.get("obstruction_type") if obs.get("obstruction_type") in OBSTRUCTION_TYPES else None)
+                    or (dmg.get("likely_type") if dmg.get("likely_type") in OBSTRUCTION_TYPES else OBSTRUCTION_TYPES[0]))
+    default_sev = prev.get("severity") or dmg.get("suggested_severity")
     default_desc = prev.get("description") or " ".join(obs.get("observations", [])) or (resident[-1] if resident else "")
     with st.form(f"review_{iid}"):
         t = st.selectbox("What is blocking the route?", OBSTRUCTION_TYPES, index=OBSTRUCTION_TYPES.index(default_type))
-        sev = st.radio("How bad is it?", SEVERITIES, index=SEVERITIES.index(prev["severity"]) if prev.get("severity") in SEVERITIES else 0)
+        sev = st.radio("How bad is it?", SEVERITIES, index=SEVERITIES.index(default_sev) if default_sev in SEVERITIES else 0)
         desc = st.text_area("Description for the cleanup crew", value=default_desc, height=110,
                             help="Pre-filled from the AI observations, or the resident's note. Edit so it's accurate.")
         note = st.text_input("Exact spot", value=prev.get("location_note", ""), placeholder="e.g. across the sidewalk outside the bus shelter")
@@ -272,6 +415,8 @@ def page_review():
             st.error("Fill in the description and your name, and tick the confirmation box.")
         else:
             store.save_review(iid, ReviewedDetails(t, sev, desc.strip(), note.strip(), who.strip(), True, now()))
+            with st.spinner("Updating the response plan…"):
+                pipeline.refresh_plan(store, iid)
             if ins["status"] == "captured":
                 store.set_status(iid, "reviewed", f"confirmed by {who.strip()}")
             st.session_state.pop(f"report_text_{iid}", None)
@@ -365,6 +510,8 @@ with st.sidebar:
         st.caption(f"Photo comparison: **{'DINOv2' if method == 'dinov2' else 'OpenCV baseline'}**")
         st.caption(f"AI observations: **{'Gemini ' + config.GEMINI_MODEL if gemini.available() else 'off (no API key)'}**")
         st.caption(f"Verified reporting channels: **{len(channels.verified())}**")
+        st.caption(f"Damage analysis: **{'CLIP + SegFormer' if vision.ml.enabled() else 'off'}**")
+        st.caption(f"Residents' website: [{RESIDENT_SITE}]({RESIDENT_SITE})")
         n_new = sum(i["status"] == "captured" for i in store.inspections())
         if n_new:
             st.caption(f"Reports waiting for review: **{n_new}**")

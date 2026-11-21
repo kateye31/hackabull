@@ -43,9 +43,23 @@ CREATE TABLE IF NOT EXISTS reviews (
 CREATE TABLE IF NOT EXISTS reports (
     inspection_id TEXT PRIMARY KEY REFERENCES inspections(id), text TEXT NOT NULL,
     html_path TEXT, channel TEXT, updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS plans (
+    inspection_id TEXT PRIMARY KEY REFERENCES inspections(id), result TEXT NOT NULL, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS events (
     id INTEGER PRIMARY KEY, inspection_id TEXT NOT NULL, status TEXT NOT NULL, note TEXT, at TEXT NOT NULL);
 """
+
+
+# map columns on locations (added after the first release, so migrated in __init__)
+LOCATION_GEO = {"lat": "REAL", "lon": "REAL", "satellite_path": "TEXT", "canopy": "REAL",
+                "after_aerial_path": "TEXT", "aerial_result": "TEXT"}
+
+
+def _loc(row) -> dict:
+    d = dict(row)
+    if d.get("aerial_result"):
+        d["aerial_result"] = json.loads(d["aerial_result"])
+    return d
 
 
 def now() -> str:
@@ -58,6 +72,10 @@ class Store:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._c() as c:
             c.executescript(SCHEMA)
+            have = {r["name"] for r in c.execute("PRAGMA table_info(locations)")}
+            for col, typ in LOCATION_GEO.items():  # older databases: add the map columns
+                if col not in have:
+                    c.execute(f"ALTER TABLE locations ADD COLUMN {col} {typ}")
 
     @contextmanager
     def _c(self):
@@ -73,14 +91,25 @@ class Store:
                             (name.strip(), description.strip(), str(reference_path), now()))
             return cur.lastrowid
 
+    def set_location_geo(self, location_id: int, lat: float | None, lon: float | None,
+                         satellite_path: str | None = None, canopy: float | None = None):
+        with self._c() as c:
+            c.execute("UPDATE locations SET lat=?, lon=?, satellite_path=?, canopy=? WHERE id=?",
+                      (lat, lon, str(satellite_path) if satellite_path else None, canopy, location_id))
+
+    def set_aerial(self, location_id: int, after_path: str, result: dict):
+        with self._c() as c:
+            c.execute("UPDATE locations SET after_aerial_path=?, aerial_result=? WHERE id=?",
+                      (str(after_path), json.dumps(result), location_id))
+
     def locations(self) -> list[dict]:
         with self._c() as c:
-            return [dict(r) for r in c.execute("SELECT * FROM locations ORDER BY name")]
+            return [_loc(r) for r in c.execute("SELECT * FROM locations ORDER BY name")]
 
     def location(self, location_id: int) -> dict | None:
         with self._c() as c:
             r = c.execute("SELECT * FROM locations WHERE id=?", (location_id,)).fetchone()
-            return dict(r) if r else None
+            return _loc(r) if r else None
 
     # ---------- inspections ----------
     def new_inspection(self, location_id: int) -> str:
@@ -136,6 +165,10 @@ class Store:
             c.execute("INSERT INTO reviews (inspection_id, details, created_at) VALUES (?,?,?)",
                       (inspection_id, json.dumps(details.to_dict()), now()))
 
+    def save_plan(self, inspection_id: str, plan: dict):
+        with self._c() as c:
+            c.execute("INSERT OR REPLACE INTO plans VALUES (?,?,?)", (inspection_id, json.dumps(plan), now()))
+
     def save_report(self, inspection_id: str, text: str, html_path: Path | None = None, channel: str | None = None):
         with self._c() as c:
             c.execute("INSERT OR REPLACE INTO reports VALUES (?,?,?,?,?)",
@@ -148,7 +181,7 @@ class Store:
             if not ins:
                 return None
             ins = dict(ins)
-            loc = dict(c.execute("SELECT * FROM locations WHERE id=?", (ins["location_id"],)).fetchone())
+            loc = _loc(c.execute("SELECT * FROM locations WHERE id=?", (ins["location_id"],)).fetchone())
             caps = {}
             for r in c.execute("SELECT * FROM captures WHERE inspection_id=? ORDER BY id", (inspection_id,)):
                 cap = dict(r)
@@ -160,6 +193,7 @@ class Store:
             rev = c.execute("SELECT details FROM reviews WHERE inspection_id=? ORDER BY id DESC LIMIT 1",
                             (inspection_id,)).fetchone()
             rep = c.execute("SELECT * FROM reports WHERE inspection_id=?", (inspection_id,)).fetchone()
+            pl = c.execute("SELECT result FROM plans WHERE inspection_id=?", (inspection_id,)).fetchone()
             ev = [dict(r) for r in c.execute("SELECT status, note, at FROM events WHERE inspection_id=? ORDER BY id",
                                              (inspection_id,))]
         return {
@@ -170,5 +204,6 @@ class Store:
             "follow_up": caps.get("follow_up"),
             "review": json.loads(rev[0]) if rev else None,
             "report": dict(rep) if rep else None,
+            "plan": json.loads(pl[0]) if pl else None,
             "events": ev,
         }

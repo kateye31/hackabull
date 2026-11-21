@@ -12,7 +12,7 @@ import numpy as np
 
 from .. import config
 from ..contracts import ComparisonResult
-from . import baseline, dino
+from . import baseline, dino, ml
 from .align import align, load_rgb
 
 # Verdict cut-offs on the LARGEST changed region (share of the image).
@@ -76,6 +76,11 @@ def compare(reference_path, capture_path, overlay_path, method: str | None = Non
                              "verdict": verdict("dinov2", primary["largest_region"])}
     if fallback_reason:
         details["fallback"] = f"DINOv2 unavailable, used OpenCV baseline ({fallback_reason})"
+    if ml.enabled():  # damage type + walkway equations (clearpath/vision/ml.py)
+        try:
+            details["damage"] = ml.analyse(ref, cap_al, primary["mask"], valid)
+        except ml.MLUnavailable as e:
+            details["damage"] = {"available": False, "reason": str(e)}
 
     return ComparisonResult(
         method=m,

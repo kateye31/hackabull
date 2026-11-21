@@ -12,6 +12,8 @@ _TMP = Path(tempfile.mkdtemp(prefix="clearpath-test-"))
 os.environ["CLEARPATH_DATA"] = str(_TMP)
 os.environ.pop("GEMINI_API_KEY", None)
 os.environ.pop("GOOGLE_API_KEY", None)
+os.environ["CLEARPATH_ML"] = "off"       # no model downloads in the default suite
+os.environ["CLEARPATH_OFFLINE"] = "1"    # no satellite / OpenStreetMap calls
 
 import cv2  # noqa: E402
 import numpy as np  # noqa: E402
@@ -207,6 +209,177 @@ class AppFlow(unittest.TestCase):
         self.assertEqual(len(at.sidebar.radio), 0)
         self.assertIn("Report storm damage", [h.value for h in at.header])
         self.assertTrue(any("35 feet" in w.value for w in at.warning))
+
+
+
+def _jpeg_with_gps(lat, lon, rgb=None) -> bytes:
+    import io
+    from PIL import Image
+    img = Image.fromarray(rgb if rgb is not None else np.full((60, 80, 3), 120, np.uint8))
+    ex = Image.Exif()
+
+    def dms(v):
+        v = abs(v)
+        return (float(int(v)), float(int(v * 60 % 60)), round(v * 3600 % 60, 4))
+    ex[0x8825] = {1: "N" if lat >= 0 else "S", 2: dms(lat), 3: "E" if lon >= 0 else "W", 4: dms(lon)}
+    buf = io.BytesIO()
+    img.save(buf, "JPEG", exif=ex)
+    return buf.getvalue()
+
+
+class Geo(unittest.TestCase):
+    def test_haversine_and_offset(self):
+        from clearpath import geo
+        lat, lon = geo.offset(28.0, -82.46, 300, 400)
+        self.assertAlmostEqual(geo.haversine_m(28.0, -82.46, lat, lon), 500, delta=2)
+
+    def test_exif_gps_roundtrip_and_strip(self):
+        from clearpath import capture, geo
+        data = _jpeg_with_gps(28.00123, -82.45987)
+        lat, lon = geo.exif_gps(data)
+        self.assertAlmostEqual(lat, 28.00123, places=4)
+        self.assertAlmostEqual(lon, -82.45987, places=4)
+        saved = capture.save_capture(data, "INS-9999", "initial").image_path
+        self.assertIsNone(geo.exif_gps(saved.read_bytes()))  # GPS is gone once saved
+
+    def test_canopy_index(self):
+        from PIL import Image
+        from clearpath import geo
+        img = np.full((100, 100, 3), (150, 150, 150), np.uint8)
+        img[:, :50] = (40, 90, 35)   # dark green canopy on the left half
+        f = _TMP / "canopy.png"
+        Image.fromarray(img).save(f)
+        self.assertAlmostEqual(geo.canopy_fraction(f, radius_frac=0.5), 0.5, delta=0.05)
+        self.assertEqual(geo.tree_risk(0.5), "high")
+
+
+class DamageEquations(unittest.TestCase):
+    def test_half_blocked_walkway(self):
+        from clearpath.vision import ml
+        walk = np.zeros((100, 100), bool)
+        walk[50:, 20:80] = True
+        changed = np.zeros_like(walk)
+        changed[50:, 20:50] = True
+        m = ml.damage_metrics(walk, changed, "Storm debris pile")
+        self.assertAlmostEqual(m["blocked_share"], 0.5, places=2)
+        self.assertAlmostEqual(m["narrowest_clear_width"], 0.5, places=2)
+        self.assertAlmostEqual(m["damage_index"], 35.0)          # 100 * 0.5 * 0.7
+        self.assertTrue(m["suggested_severity"].startswith("Partly"))
+
+    def test_fully_blocked_and_power_line(self):
+        from clearpath.vision import ml
+        walk = np.zeros((100, 100), bool)
+        walk[50:] = True
+        m = ml.damage_metrics(walk, walk.copy(), "Fallen tree or large branches")
+        self.assertTrue(m["suggested_severity"].startswith("Impassable"))
+        m = ml.damage_metrics(walk, np.zeros_like(walk), "Downed power line")
+        self.assertTrue(m["suggested_severity"].startswith("Impassable"))  # always critical
+
+    def test_no_walkway_found_uses_lower_half(self):
+        from clearpath.vision import ml
+        m = ml.damage_metrics(np.zeros((40, 40), bool), np.ones((40, 40), bool))
+        self.assertIn("lower half", m["note"])
+
+
+OSM = [  # a tiny stand-in for an Overpass response
+    {"type": "node", "id": 1, "lat": 28.001, "lon": -82.459,
+     "tags": {"craft": "gardener", "name": "Oak Tree Care", "phone": "+1 813 555 0100"}},
+    {"type": "node", "id": 2, "lat": 28.010, "lon": -82.459, "tags": {"shop": "hardware", "name": "Corner Hardware"}},
+    {"type": "way", "id": 3, "center": {"lat": 28.02, "lon": -82.45}, "tags": {"amenity": "hospital", "name": "General Hospital"}},
+    {"type": "node", "id": 4, "lat": 28.0005, "lon": -82.4590, "tags": {"amenity": "shelter", "shelter_type": "public_transport"}},
+    {"type": "node", "id": 5, "lat": 28.003, "lon": -82.462, "tags": {"amenity": "community_centre", "name": "Rec Center"}},
+]
+
+
+class NearbyHelpAndPlan(unittest.TestCase):
+    def test_resources_by_need(self):
+        from clearpath.reporting import resources
+        near = resources.nearby(28.0006, -82.4594, resources.needed_categories("Fallen tree or large branches"), elements=OSM)
+        self.assertEqual(near["by_category"]["tree_service"][0]["name"], "Oak Tree Care")
+        self.assertEqual(near["by_category"]["hospital"][0]["name"], "General Hospital")
+        self.assertEqual([p["name"] for p in near["by_category"]["shelter"]], ["Rec Center"])  # bus shelter excluded
+        self.assertLess(near["by_category"]["tree_service"][0]["distance_m"], 100)
+
+    def test_offline_without_cache(self):
+        from clearpath.reporting import resources
+        self.assertFalse(resources.for_damage(1.0, 2.0, "Storm debris pile")["available"])
+        self.assertFalse(resources.for_damage(None, None, None)["available"])
+
+    def test_rule_plan(self):
+        from clearpath.reporting import plan, resources
+        near = resources.nearby(28.0006, -82.4594, resources.needed_categories("Downed power line"), elements=OSM)
+        p = plan.rule_plan("Downed power line", None, 5, near, "Palm St")
+        self.assertEqual(p["priority"], "Critical")
+        self.assertTrue(any("911" in x for x in p["safety"]))
+        near = resources.nearby(28.0006, -82.4594, resources.needed_categories("Fallen tree or large branches"), elements=OSM)
+        p = plan.rule_plan("Fallen tree or large branches", "Impassable: no way through", 60, near)
+        self.assertEqual(p["priority"], "High")
+        self.assertEqual(p["call_first"][0]["name"], "Oak Tree Care")
+
+
+class StoreMigration(unittest.TestCase):
+    def test_old_database_gets_map_columns(self):
+        import sqlite3
+        db = _TMP / "old.db"
+        with sqlite3.connect(db) as c:
+            c.execute("CREATE TABLE locations (id INTEGER PRIMARY KEY, name TEXT NOT NULL, description TEXT, "
+                      "reference_path TEXT NOT NULL, created_at TEXT NOT NULL)")
+            c.execute("INSERT INTO locations VALUES (1, 'Old spot', '', 'x.jpg', '2026-01-01')")
+        s = Store(db)
+        s.set_location_geo(1, 28.0, -82.0, None, 0.3)
+        s.set_aerial(1, "after.jpg", {"verdict": "clear"})
+        loc = s.location(1)
+        self.assertEqual((loc["lat"], loc["canopy"], loc["aerial_result"]["verdict"]), (28.0, 0.3, "clear"))
+
+
+class LocateReports(unittest.TestCase):
+    def test_gps_photo_finds_nearest_spot(self):
+        from clearpath import pipeline
+        s = Store(_TMP / "loc.db")
+        ref, _, _ = _pair(blocked=False)
+        a = s.add_location("A", ref)
+        s.set_location_geo(a, 28.0000, -82.4600)
+        b = s.add_location("B", ref)
+        s.set_location_geo(b, 28.0100, -82.4600)
+        got = pipeline.locate(s, _jpeg_with_gps(28.0101, -82.4601))
+        self.assertEqual((got["location"]["name"], got["matched_by"]), ("B", "photo GPS"))
+        got = pipeline.locate(s, _jpeg_with_gps(10.0, 10.0), location_id=a)  # far away: falls back to the pick
+        self.assertEqual(got["matched_by"], "resident's choice")
+        with self.assertRaises(LookupError):
+            pipeline.locate(s, _jpeg_with_gps(10.0, 10.0))
+
+
+class ResidentsAPI(unittest.TestCase):
+    def test_report_round_trip(self):
+        from fastapi.testclient import TestClient
+        from api import main
+        main._store = None
+        client = TestClient(main.app)
+        demo.seed(main.store())
+        spots = client.get("/api/locations").json()
+        self.assertGreaterEqual(len(spots), 4)
+        self.assertEqual(client.get(spots[0]["before_url"]).status_code, 200)
+        photo = demo.demo_photo(main.store().location(spots[0]["id"])["reference_path"], "initial").read_bytes()
+        r = client.post("/api/reports", files={"photo": ("p.jpg", photo, "image/jpeg")},
+                        data={"location_id": spots[0]["id"], "note": "Tree down across the sidewalk"})
+        self.assertEqual(r.status_code, 201, r.text)
+        rid = r.json()["id"]
+        st = client.get(f"/api/reports/{rid}").json()   # background analysis has run by now
+        self.assertFalse(st["processing"])
+        self.assertNotIn("note", st)                      # residents never see notes or photos
+        events = main.store().bundle(rid)["events"]
+        self.assertTrue(any((e["note"] or "").startswith("Resident: Tree down") for e in events))
+        self.assertIsNotNone(main.store().bundle(rid)["plan"])
+
+    def test_rejects_bad_input(self):
+        from fastapi.testclient import TestClient
+        from api import main
+        client = TestClient(main.app)
+        r = client.post("/api/reports", files={"photo": ("x.txt", b"not a photo", "text/plain")})
+        self.assertEqual(r.status_code, 415)
+        r = client.post("/api/reports", files={"photo": ("p.jpg", _jpeg_with_gps(1.0, 1.0), "image/jpeg")})
+        self.assertEqual(r.status_code, 422)              # no spot near that GPS and none picked
+        self.assertEqual(client.get("/api/reports/INS-9999").status_code, 404)
 
 
 if __name__ == "__main__":
