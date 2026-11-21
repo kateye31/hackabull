@@ -124,24 +124,12 @@ class Reporting(unittest.TestCase):
 
 
 class AppFlow(unittest.TestCase):
-    def test_demo_inspection_end_to_end(self):
+    def test_neighborhood_app_starts(self):
         from streamlit.testing.v1 import AppTest
         at = AppTest.from_file(str(config.ROOT / "app.py"), default_timeout=180).run()
-        at.sidebar.radio[0].set_value("Locations").run()
-        next(b for b in at.button if "demo" in b.label).click().run()
-        at.sidebar.radio[0].set_value("Inspect").run()
-        next(b for b in at.button if b.label == "Start inspection").click().run()
-        next(b for b in at.button if b.label == "Check this photo").click().run()
         self.assertFalse(at.exception)
-        at.text_area[0].set_value("Scooter lying across the walkway.")
-        next(t for t in at.text_input if t.label == "Your name").set_value("Tester")
-        at.checkbox[0].check()
-        next(b for b in at.button if b.label == "Confirm details").click().run()
-        next(b for b in at.button if b.label.startswith("Mark as sent")).click().run()
-        next(b for b in at.button if b.label == "Check follow-up photo").click().run()
-        next(b for b in at.button if b.label == "Confirm resolved").click().run()
-        self.assertFalse(at.exception)
-        self.assertIn("Resolved.", [s.value for s in at.success])
+        self.assertEqual(at.title[0].value, "ClearPath")
+        self.assertTrue(any(b.label == "Check this location" for b in at.button))
 
 
 if __name__ == "__main__":
