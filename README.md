@@ -3,10 +3,10 @@
 After a hurricane, people need to know which neighborhood streets, sidewalks and walkways they can actually use, and the city needs to know what to clear first. ClearPath documents storm damage blocking a neighborhood route, gets it to the right office, and confirms it was cleared.
 
 1. **Before the storm.** Photograph key routes while they're clear: the sidewalk to the bus stop, curb ramps, the walkway to the shelter or clinic. That's the *before-storm reference*.
-2. **Capture.** After the storm, take a photo from the same spot with a webcam or phone.
+2. **Report (residents).** After the storm, a resident opens the **Report damage** page, picks the spot, and sends one photo from the same place, with an optional note. The link `…/?page=report` shows only that page.
 3. **Compare.** The photo is compared against the before-storm reference (DINOv2, with an OpenCV baseline), and what's new is highlighted: fallen trees, branches, debris, flood water, a downed sign.
 4. **Describe.** Gemini drafts observations: what's blocking the route, hazards such as downed power lines, who it affects (people on foot, in wheelchairs, with strollers, or driving out), and a suggested action.
-5. **Review.** A person checks the photos and confirms or edits the details. Nothing goes out unconfirmed.
+5. **Review (reviewer).** On the **Review queue** page, a neighborhood reviewer checks the photos and the resident's note, and confirms or edits the details. Nothing goes out unconfirmed.
 6. **Report.** An editable report, plus a printable HTML export, goes to a **verified** local channel: the county or city storm-debris line, 311, or the power company for downed lines.
 7. **Follow up.** After cleanup, a new photo is compared against the **same** before-storm reference, and the reviewer marks it cleared or still blocked.
 
@@ -17,7 +17,7 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-In the app, go to **Locations → Add demo locations**, then **Inspect → Start inspection → Demo photo**. No camera is needed.
+In the app, go to **Before-storm photos → Add demo locations**. Then, as a resident, **Report damage → pick a spot → Demo photo → Send report**, and as the reviewer, **Review queue → Open**. No camera is needed.
 
 Optional: `set GEMINI_API_KEY=...` (Windows) or `export GEMINI_API_KEY=...` before launching to turn on AI observations. Without a key, the reviewer fills in the details by hand.
 
@@ -35,7 +35,7 @@ Checklists per person: [docs/PLAN.md](docs/PLAN.md). The hand-off types live in 
 
 | Path | Owner | What it does |
 | --- | --- | --- |
-| [app.py](app.py) | 1 | Streamlit app: locations, inspect flow, review form, report, follow-up |
+| [app.py](app.py) | 1 | Streamlit app: residents' Report damage page; reviewer's queue, review form, report, after-cleanup follow-up; before-storm photos |
 | [clearpath/capture.py](clearpath/capture.py) | 1 | Saves webcam/upload photos as `SavedCapture` (fixes rotation, strips EXIF/GPS) |
 | [clearpath/demo.py](clearpath/demo.py) | 1 | Demo neighborhood routes after a storm, so the app runs without a camera; `demo real` imports your own before/after photos as a backup run |
 | [clearpath/preflight.py](clearpath/preflight.py) | 1 | `python -m clearpath.preflight`: checks the demo laptop (DINOv2 cached, camera, Gemini, channels, photos) |

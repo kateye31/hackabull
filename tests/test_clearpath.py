@@ -166,16 +166,30 @@ class RealDemoPhotos(unittest.TestCase):
 
 
 class AppFlow(unittest.TestCase):
-    def test_demo_inspection_end_to_end(self):
+    def _demo_app(self, url_page=None):
         from streamlit.testing.v1 import AppTest
-        at = AppTest.from_file(str(config.ROOT / "app.py"), default_timeout=180).run()
+        at = AppTest.from_file(str(config.ROOT / "app.py"), default_timeout=180)
+        if url_page:
+            at.query_params["page"] = url_page
+        at.run()
+        return at
+
+    def test_resident_reports_then_reviewer_clears(self):
+        at = self._demo_app()
         at.sidebar.radio[0].set_value("Locations").run()
         next(b for b in at.button if "demo" in b.label).click().run()
-        at.sidebar.radio[0].set_value("Inspect").run()
-        next(b for b in at.button if b.label == "Start inspection").click().run()
-        next(b for b in at.button if b.label == "Check this photo").click().run()
+        # resident: one photo and a note
+        at.sidebar.radio[0].set_value("Report damage").run()
+        at.text_area[0].set_value("Big branch across the sidewalk, no way past with a wheelchair.")
+        next(b for b in at.button if b.label == "Send report").click().run()
         self.assertFalse(at.exception)
-        at.text_area[0].set_value("Fallen tree across the sidewalk.")
+        self.assertTrue(any("is with the reviewer" in s.value for s in at.success))
+        # reviewer: queue -> open -> confirm -> send -> after cleanup -> cleared
+        at.sidebar.radio[0].set_value("Review").run()
+        self.assertIn("Needs review (1)", [h.value for h in at.subheader])
+        next(b for b in at.button if b.label == "Open").click().run()
+        self.assertTrue(any("Big branch across the sidewalk" in i.value for i in at.info))
+        self.assertIn("Big branch across the sidewalk", at.text_area[0].value)  # pre-filled from the resident note
         next(t for t in at.text_input if t.label == "Your name").set_value("Tester")
         at.checkbox[0].check()
         next(b for b in at.button if b.label == "Confirm details").click().run()
@@ -184,6 +198,15 @@ class AppFlow(unittest.TestCase):
         next(b for b in at.button if b.label == "Confirm cleared").click().run()
         self.assertFalse(at.exception)
         self.assertIn("Cleared.", [s.value for s in at.success])
+        next(b for b in at.button if b.label == "Back to queue").click().run()
+        self.assertIn("Closed (1)", [h.value for h in at.subheader])
+
+    def test_resident_link_hides_reviewer_pages(self):
+        at = self._demo_app(url_page="report")
+        self.assertFalse(at.exception)
+        self.assertEqual(len(at.sidebar.radio), 0)
+        self.assertIn("Report storm damage", [h.value for h in at.header])
+        self.assertTrue(any("35 feet" in w.value for w in at.warning))
 
 
 if __name__ == "__main__":

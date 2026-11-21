@@ -1,4 +1,5 @@
-"""ClearPath: after a hurricane, document storm damage blocking a neighborhood route, report it, confirm it was cleared.
+"""ClearPath: after a hurricane, residents report storm damage blocking a neighborhood route; a reviewer
+confirms it, reports it and confirms it was cleared.
 
     streamlit run app.py
 
@@ -40,6 +41,9 @@ def vision_ready() -> str:
 
 
 store = get_store()
+RESIDENT_NOTE = "Resident: "  # prefix for the note a resident sends with their photo (kept in the event history)
+POWER_LINE_WARNING = ("**Downed power line? Stay at least 35 feet (10 m) away and call 911.** "
+                      "Don't go closer to take a photo.")
 
 
 # ---------------------------------------------------------------- helpers
@@ -145,29 +149,75 @@ def page_locations():
                 st.markdown(f"**{l['name']}**  \n{l['description'] or ''}")
 
 
-def page_inspect():
+def page_report():
+    """For residents: one photo of storm damage at a known spot. A reviewer handles the rest."""
+    st.header("Report storm damage")
+    st.write("Seen a fallen tree, debris or flooding blocking a street, sidewalk or walkway? Send one photo. "
+             "A neighborhood reviewer checks every report before it goes to the city.")
+    st.warning(POWER_LINE_WARNING)
+    done = st.session_state.get("submitted")
+    if done:
+        st.success(f"Thanks! Report **{done}** is with the reviewer. You don't need to do anything else.")
+        if st.button("Report something else"):
+            st.session_state.pop("submitted")
+            st.rerun()
+        return
     locs = store.locations()
     if not locs:
-        st.info("Add a location with a before-storm photo first (Locations page).")
+        st.info("No neighborhood spots are set up yet. A reviewer adds them on the Locations page.")
         return
+    by_name = {l["name"]: l for l in locs}
+    loc = by_name[st.selectbox("Which spot is it?", list(by_name))]
+    st.image(loc["reference_path"], caption="Before the storm. Take your photo from about where this was taken.", width=420)
+    img = photo_input("resident", loc["reference_path"], "initial")
+    note = st.text_area("What did you see? (optional)", height=80,
+                        placeholder="e.g. a big branch across the sidewalk, no way past with a wheelchair")
+    if img and st.button("Send report", type="primary"):
+        iid = store.new_inspection(loc["id"])
+        if note.strip():
+            store.set_status(iid, "captured", RESIDENT_NOTE + note.strip())
+        process_capture(iid, "initial", img, loc["reference_path"])
+        st.session_state.submitted = iid
+        st.rerun()
 
+
+QUEUE = (
+    ("Needs review", ("captured",)),
+    ("Ready to report", ("reviewed",)),
+    ("Awaiting cleanup", ("reported", "still_blocked")),
+    ("Closed", ("resolved", "dismissed")),
+)
+
+
+def page_review():
+    """For the reviewer: the queue of resident reports, then confirm -> report -> after cleanup."""
     qp = st.query_params.get("inspection")
     if qp and "iid" not in st.session_state and store.bundle(qp):
         st.session_state.iid = qp  # shareable link: ?inspection=INS-0001
     iid = st.session_state.get("iid")
+    if iid and not store.bundle(iid):  # e.g. the data folder was reset
+        st.session_state.pop("iid")
+        iid = None
     if iid:
         st.query_params["inspection"] = iid
     elif "inspection" in st.query_params:
         del st.query_params["inspection"]
     if not iid:
-        st.header("Start an inspection")
-        names = {l["name"]: l["id"] for l in locs}
-        name = st.selectbox("Where are you?", list(names))
-        loc = next(l for l in locs if l["id"] == names[name])
-        st.image(loc["reference_path"], caption="Before the storm: stand roughly here", width=420)
-        if st.button("Start inspection", type="primary"):
-            st.session_state.iid = store.new_inspection(names[name])
-            st.rerun()
+        st.header("Review queue")
+        items = store.inspections()
+        if not items:
+            st.info("No reports yet. Residents send them from the **Report damage** page "
+                    "(share the link ending in `?page=report`).")
+            return
+        for title, statuses in QUEUE:
+            group = [i for i in items if i["status"] in statuses]
+            st.subheader(f"{title} ({len(group)})")
+            for i in group:
+                c1, c2, c3, c4 = st.columns([1.2, 2.5, 2.5, 1])
+                c1.write(f"**{i['id']}**")
+                c2.write(i["location_name"])
+                c3.write(STATUS_LABELS[i["status"]])
+                c4.button("Open", key=f"open_{i['id']}", on_click=_open, args=(i["id"],))
         return
 
     b = store.bundle(iid)
@@ -175,9 +225,13 @@ def page_inspect():
     top = st.columns([4, 1])
     top[0].header(f"{iid} · {loc['name']}")
     top[0].caption(STATUS_LABELS[ins["status"]])
-    if top[1].button("Close inspection"):
+    if top[1].button("Back to queue"):
         st.session_state.pop("iid")
+        st.query_params.pop("inspection", None)  # otherwise the ?inspection= link reopens it on rerun
         st.rerun()
+    resident = [e["note"][len(RESIDENT_NOTE):] for e in b["events"] if (e["note"] or "").startswith(RESIDENT_NOTE)]
+    if resident:
+        st.info(f"**Resident wrote:** {resident[-1]}")
 
     # 1. initial capture
     st.subheader("1. After-storm photo")
@@ -201,12 +255,12 @@ def page_inspect():
         st.error("**Downed power line: treat it as live.** Stay at least 35 feet (10 m) away, keep others back, and call "
                  "**911** and the power company now. Don't wait for this report.")
     default_type = prev.get("obstruction_type") or (obs.get("obstruction_type") if obs.get("obstruction_type") in OBSTRUCTION_TYPES else OBSTRUCTION_TYPES[0])
-    default_desc = prev.get("description") or " ".join(obs.get("observations", []))
+    default_desc = prev.get("description") or " ".join(obs.get("observations", [])) or (resident[-1] if resident else "")
     with st.form(f"review_{iid}"):
         t = st.selectbox("What is blocking the route?", OBSTRUCTION_TYPES, index=OBSTRUCTION_TYPES.index(default_type))
         sev = st.radio("How bad is it?", SEVERITIES, index=SEVERITIES.index(prev["severity"]) if prev.get("severity") in SEVERITIES else 0)
         desc = st.text_area("Description for the cleanup crew", value=default_desc, height=110,
-                            help="Pre-filled from the AI observations when available. Edit so it's accurate.")
+                            help="Pre-filled from the AI observations, or the resident's note. Edit so it's accurate.")
         note = st.text_input("Exact spot", value=prev.get("location_note", ""), placeholder="e.g. across the sidewalk outside the bus shelter")
         who = st.text_input("Your name", value=prev.get("reviewer", ""))
         ok = st.checkbox("I looked at the photos and these details are accurate.", value=bool(prev.get("confirmed")))
@@ -286,36 +340,33 @@ def page_inspect():
         st.rerun()
 
 
-def page_all():
-    st.header("All inspections")
-    items = store.inspections()
-    if not items:
-        st.info("No inspections yet.")
-        return
-    for i in items:
-        c1, c2, c3, c4 = st.columns([1.2, 2.5, 2.5, 1])
-        c1.write(f"**{i['id']}**")
-        c2.write(i["location_name"])
-        c3.write(STATUS_LABELS[i["status"]])
-        c4.button("Open", key=f"open_{i['id']}", on_click=_open, args=(i["id"],))
-
-
 def _open(iid: str):
-    # runs before the next rerun, so it may set the sidebar radio's value
     st.session_state.iid = iid
-    st.session_state.page = "Inspect"
 
 
 # ---------------------------------------------------------------- layout
+PAGES = {
+    "Report damage": ("Report damage (residents)", page_report),
+    "Review": ("Review queue (reviewer)", page_review),
+    "Locations": ("Before-storm photos (reviewer)", page_locations),
+}
+resident_only = st.query_params.get("page") == "report"  # the link residents get; not a login, just a simpler view
+
 with st.sidebar:
     st.title("ClearPath")
     st.caption("After a hurricane: report storm damage blocking neighborhood streets, sidewalks and walkways, and confirm it gets cleared.")
-    page = st.radio("Page", ["Inspect", "Locations", "All inspections"], key="page", label_visibility="collapsed")
-    st.divider()
-    method = vision_ready()
-    st.caption(f"Photo comparison: **{'DINOv2' if method == 'dinov2' else 'OpenCV baseline'}**")
-    st.caption(f"AI observations: **{'Gemini ' + config.GEMINI_MODEL if gemini.available() else 'off (no API key)'}**")
-    n_ver = len(channels.verified())
-    st.caption(f"Verified reporting channels: **{n_ver}**")
+    if resident_only:
+        page = "Report damage"
+    else:
+        page = st.radio("Page", list(PAGES), key="page", format_func=lambda k: PAGES[k][0],
+                        label_visibility="collapsed")
+        st.divider()
+        method = vision_ready()
+        st.caption(f"Photo comparison: **{'DINOv2' if method == 'dinov2' else 'OpenCV baseline'}**")
+        st.caption(f"AI observations: **{'Gemini ' + config.GEMINI_MODEL if gemini.available() else 'off (no API key)'}**")
+        st.caption(f"Verified reporting channels: **{len(channels.verified())}**")
+        n_new = sum(i["status"] == "captured" for i in store.inspections())
+        if n_new:
+            st.caption(f"Reports waiting for review: **{n_new}**")
 
-{"Inspect": page_inspect, "Locations": page_locations, "All inspections": page_all}[page]()
+PAGES[page][1]()

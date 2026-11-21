@@ -13,6 +13,7 @@ Hands off: a saved image with its inspection ID and phase (`SavedCapture`) to Pe
 - [x] Resolution: confirm resolved / still blocked / retake; dismiss false alarms
 - [x] Demo locations so the demo works without a camera
 - [x] Real-photo import (`python -m clearpath.demo real`), preflight check (`python -m clearpath.preflight`), playbook in [DEMO.md](DEMO.md)
+- [x] Two pages: residents' **Report damage** (one photo + note; `?page=report` link hides reviewer pages) and the reviewer's **Review queue**
 - [x] Refocused on neighborhoods after a hurricane: storm-damage types, power-line safety warning, before-storm / after-cleanup flow, 4 storm demo routes
 - [ ] Photo shoot at 2–3 neighborhood routes: before, staged storm debris, after cleanup (note where you stood); import with `--eval` so Person 2 gets the pairs ([DEMO.md §1](DEMO.md#1-photo-shoot-in-the-neighborhood-about-45-minutes))
 - [ ] Test the webcam flow on the demo laptop, in the room you'll present in ([DEMO.md §2](DEMO.md#2-laptop-check-in-the-presenting-room))

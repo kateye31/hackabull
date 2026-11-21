@@ -51,24 +51,25 @@ Then in the browser:
 - Open **http://localhost:8501**. Don't use the "Network URL": browsers block the camera on plain-http addresses other than localhost.
 - Allow camera access when asked. If you said no once, click the camera icon in the address bar to reset it.
 - The laptop webcam faces *you*, not a street. For the live part, build a **tabletop street**: point the webcam (or a USB webcam) at a clear patch of table, add it on **Locations** as "Demo table" with the Camera option (that's the before-storm photo), then drop a handful of twigs and leaves or a crumpled bag across it (the storm). Check the lighting: projector lights can make frames very dark or blown out.
-- Run one full inspection with the camera: after-storm photo → Obstructed → review → mark as sent → clear the table → after-cleanup photo → **Confirm cleared**.
+- Run one full report with the camera: **Report damage** → Demo table → camera → **Send report**, then **Review queue** → Open → confirm → mark as sent → clear the table → after-cleanup photo → **Confirm cleared**.
 
 **Done when:** the preflight passes in the room and you've done one full camera inspection there.
 
 ## 3. Demo script (about 3 minutes)
 
-Have the app open on **Inspect**, sidebar visible. Finish two inspections beforehand (one *Cleared*, one *Still blocked*) so **All inspections** looks like a real neighborhood after a storm.
+Two roles, two pages: **residents** send photos on *Report damage*; **the reviewer** works the *Review queue*. Before you start, finish two reports (one *Cleared*, one *Awaiting cleanup*) so the queue looks like a real neighborhood after a storm. Open on **Report damage**, sidebar visible.
 
 | Time | Do | Say |
 | --- | --- | --- |
 | 0:00 | Locations page, point at a before-storm photo | "Before hurricane season, a neighborhood photographs the routes people depend on: the sidewalk to the bus stop, the curb ramps, the walkway to the community center." |
-| 0:20 | Inspect → a real location (or Demo table) → Start → camera/Demo photo → **Check this photo** | "The storm passes. A neighbor goes back to the same spot and takes one photo." |
+| 0:20 | **Report damage** → a real location (or Demo table) → camera/Demo photo → type a short note → **Send report** | "The storm passes. A neighbor goes back to the same spot and sends one photo. That's all they do: no account, no form." Point at the 911 power-line warning. |
+| 0:35 | Switch to **Review queue** → the new report under *Needs review* → **Open** | "On the other side, a neighborhood reviewer sees every report in one queue." |
 | 0:40 | Point at before / after / highlighted | "DINOv2 compares the two photos patch by patch and outlines what's new. Shadows and lighting changes mostly don't trip it; a debris pile does." Open **Comparison details**: "A pixel-diff baseline runs too, and here it misses it." (Bayview Avenue curb ramp shows this: DINOv2 *obstructed*, OpenCV *clear*.) |
 | 1:10 | AI observations (if Gemini is on) | "Gemini drafts what it sees and who can't get through: wheelchair users, strollers, cars. It's labeled a draft. And if it sees a downed line, the app tells you to stay away and call 911 first." |
 | 1:30 | Fill the review form, tick the box, **Confirm details** | "A person picks the damage type and how bad it is, and signs off. Nothing goes out unconfirmed." |
 | 1:50 | Report: editable text, **Download printable report**, **Mark as sent** | "It goes to the verified storm-debris line with the photos attached, so the crew knows exactly what to bring." |
 | 2:20 | After cleanup: cleared photo → **Confirm cleared** | "After the crew comes, same spot, same before-storm photo. It's clear, so the route is open again. If not, it goes back as still blocked." |
-| 2:40 | **All inspections** | "Every route in the neighborhood and whether it's passable: a recovery map built one photo at a time." |
+| 2:40 | **Back to queue** | "Every route in the neighborhood: needs review, ready to report, awaiting cleanup, closed. A recovery map built one photo at a time." |
 
 Demo locations:
 
@@ -85,6 +86,6 @@ If anything goes wrong live, switch the photo source to **Demo photo** on a real
 | Camera black or "in use" | Close Teams/Zoom, or switch to **Demo photo** |
 | Gemini slow or fails | It falls back to "No AI observations"; fill the form by hand and say "we never depend on the AI" (fitting: after a storm the network is often down) |
 | Wi-Fi down | DINOv2 is cached (preflight checked), so only Gemini is affected |
-| App crashes | `Ctrl+C`, `streamlit run app.py` again; inspections are saved in SQLite, so reopen from **All inspections** |
+| App crashes | `Ctrl+C`, `streamlit run app.py` again; reports are saved in SQLite, so reopen from the **Review queue** |
 
 Rehearse the whole script twice: once with the camera, once on the backup path only. Time both.
