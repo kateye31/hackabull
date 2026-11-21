@@ -108,11 +108,15 @@ const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({{"&": "&amp;", "
 if (!window.L || !D.spots.length) {{
   document.getElementById("map").outerHTML = '<p class="off">' + (window.L ? "No spots have map coordinates yet." : "Map unavailable offline.") + "</p>";
 }} else {{
+  const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services";
   const base = {{
-    "Streets": L.tileLayer("https://{{s}}.basemaps.cartocdn.com/rastertiles/voyager/{{z}}/{{x}}/{{y}}{{r}}.png",
-                           {{maxZoom: 20, subdomains: "abcd", attribution: "© OpenStreetMap contributors © CARTO"}}),
-    "Satellite": L.tileLayer("https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{{z}}/{{y}}/{{x}}",
-                             {{maxNativeZoom: 16, maxZoom: 19, attribution: "Imagery: USGS The National Map"}}),
+    "Streets": L.layerGroup([
+      L.tileLayer(ESRI + "/Canvas/World_Light_Gray_Base/MapServer/tile/{{z}}/{{y}}/{{x}}", {{maxZoom: 19, maxNativeZoom: 16,
+                  attribution: "Esri, HERE, Garmin, © OpenStreetMap contributors"}}),
+      L.tileLayer(ESRI + "/Canvas/World_Light_Gray_Reference/MapServer/tile/{{z}}/{{y}}/{{x}}", {{maxZoom: 19, maxNativeZoom: 16}}),
+    ]),
+    "Satellite": L.tileLayer(ESRI + "/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}",
+                             {{maxZoom: 19, attribution: "Imagery: Esri, Maxar, Earthstar Geographics"}}),
   }};
   const map = L.map("map", {{ layers: [base.Streets], scrollWheelZoom: false, zoomSnap: 0.5 }});
   const spots = L.layerGroup().addTo(map), help = L.layerGroup();   // nearby help starts hidden

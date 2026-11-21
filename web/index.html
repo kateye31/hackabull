@@ -242,16 +242,18 @@ textarea::placeholder { color: var(--ink-2); opacity: 1; }
 const $ = (id) => document.getElementById(id);
 const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const state = { lat: null, lon: null, spots: [], map: null, pins: {}, me: null };
-const TILES = {
-  "Streets": ["https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", "© OpenStreetMap contributors", 19],
-  "Satellite": ["https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}",
-                "Imagery: USGS The National Map", 16],
-};
+const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services";
 function baseLayers() {
-  const out = {};
-  for (const [name, [url, attribution, maxNativeZoom]] of Object.entries(TILES))
-    out[name] = L.tileLayer(url, { attribution, maxNativeZoom, maxZoom: 19 });
-  return out;
+  const opt = { maxZoom: 19, maxNativeZoom: 16 };
+  return {
+    "Streets": L.layerGroup([
+      L.tileLayer(ESRI + "/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+                  { ...opt, attribution: "Esri, HERE, Garmin, © OpenStreetMap contributors" }),
+      L.tileLayer(ESRI + "/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}", opt),
+    ]),
+    "Satellite": L.tileLayer(ESRI + "/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+                             { maxZoom: 19, attribution: "Imagery: Esri, Maxar, Earthstar Geographics" }),
+  };
 }
 function pinIcon(cls, html = "") {
   const size = cls === "help-pin" ? 26 : cls === "me" ? 16 : 22;

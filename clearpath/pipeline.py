@@ -62,21 +62,6 @@ def aerial_reference(reference_path: str, location: dict) -> str | None:
 def analyse(store: Store, cap: SavedCapture, reference_path: str, progress: Callable[[str], None] = _noop,
             *, demo_path: Path | None = None):
     overlay = config.OVERLAYS / cap.inspection_id / f"{cap.phase}_{cap.capture_id}.png"
-<<<<<<< HEAD
-    from .satellite import site_meta  # Person 3's aerial sites (Esri before / NOAA after)
-    aerial_site = site_meta(reference_path) is not None
-    street = aerial_site and _is_street_photo(cap.image_path)
-    if street:  # a resident's street photo can't be compared pixel-for-pixel with an aerial before-image
-        result = _street_photo_result(cap, overlay)
-    else:
-        result = vision.compare(reference_path, cap.image_path, overlay, aerial=aerial_site)
-    store.save_comparison(cap.capture_id, result)
-    if cap.phase == "initial":
-        progress("Asking Gemini what it sees")
-        store.save_observation(cap.capture_id, gemini.observe(
-            reference_path, cap.image_path, None if street else result.to_dict(),
-            imagery={} if street else None))  # {} = ground prompt even at an aerial site
-=======
     location = store.bundle(cap.inspection_id)["location"]
     overhead = aerial_reference(reference_path, location)
     after = satellite.imagery_for(reference_path, demo_path) if demo_path else None
@@ -102,44 +87,9 @@ def analyse(store: Store, cap: SavedCapture, reference_path: str, progress: Call
             store.save_observation(cap.capture_id, gemini.observe(
                 reference_path, cap.image_path, result.to_dict(), imagery=imagery))
     if cap.phase == "initial":
->>>>>>> 0eff66b268e21425adb8f163193cde02fc18fddc
         progress("Finding crews and resources nearby")
         refresh_plan(store, cap.inspection_id)
     return result
-
-
-def _is_street_photo(path) -> bool:
-    from .vision import ml
-    from .vision.align import load_rgb
-    if not ml.enabled():
-        return False
-    try:
-        return ml.is_street_photo(load_rgb(path))
-    except ml.MLUnavailable:
-        return False
-
-
-def _street_photo_result(cap: SavedCapture, overlay) -> ComparisonResult:
-    """No pixel comparison possible: keep the photo, suggest the damage type, let the reviewer judge."""
-    import shutil
-    from .vision import ml
-    from .vision.align import load_rgb
-    overlay.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(cap.image_path, overlay)
-    dmg = {"available": False, "street": True,
-           "reason": "Street photo at a spot that only has an aerial before-image, so there's nothing to measure "
-                     "it against. The damage type is a suggestion from the photo alone."}
-    try:
-        sugg = ml.classify_damage(load_rgb(cap.image_path))
-        dmg["suggestions"] = sugg
-        dmg["likely_type"] = next((x["type"] for x in sugg if x["type"] != "None"), None)
-    except ml.MLUnavailable:
-        pass
-    return ComparisonResult(method="none", score=0.0, changed_fraction=0.0, largest_region=0.0, verdict="uncertain",
-                            overlay_path=overlay, aligned=False,
-                            details={"alignment": {"aligned": False, "inliers": 0,
-                                                   "reason": "street photo vs aerial before-image"},
-                                     "damage": dmg})
 
 
 def refresh_plan(store: Store, inspection_id: str) -> dict:
@@ -158,6 +108,8 @@ class ResidentPhotoCheckUnavailable(RuntimeError):
 
 def validate_resident_photo(image_bytes: bytes):
     decision = gemini.check_resident_photo(image_bytes)
+    if decision == "skipped":  # no Gemini key configured: accept, and the human reviewer screens it
+        return
     if decision is None:
         raise ResidentPhotoCheckUnavailable("We couldn't check your photo right now. Please try again shortly.")
     if decision == "unrelated":

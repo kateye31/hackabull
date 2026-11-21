@@ -129,10 +129,13 @@ class ResidentPhotoCheck(BaseModel):
     decision: Literal["relevant", "unrelated", "unclear"]
 
 
-def check_resident_photo(image_bytes: bytes) -> str | None:
-    """Classify visible content before a resident submission is saved."""
+def check_resident_photo(image_bytes: bytes) -> str | None:  # relevant | unrelated | unclear | skipped | None
+    """Classify visible content before a resident submission is saved.
+
+    "skipped" when no key is configured (screening off; the reviewer screens every report anyway),
+    None when a key is set but the check failed (the upload is refused with a retry message)."""
     if not available():
-        return None
+        return "skipped"
     try:
         from google import genai
         from google.genai import types

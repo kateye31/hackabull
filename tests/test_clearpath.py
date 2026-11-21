@@ -521,5 +521,12 @@ class DotEnv(unittest.TestCase):
         self.assertEqual((os.environ["CLEARPATH_TEST_A"], os.environ["CLEARPATH_TEST_B"]), ("from file", "real"))
 
 
+class ScreeningWithoutKey(unittest.TestCase):
+    def test_no_key_means_screening_is_skipped_not_refused(self):
+        from clearpath import pipeline
+        self.assertEqual(gemini.check_resident_photo(b"x"), "skipped")
+        pipeline.validate_resident_photo(b"x")   # must not raise: the reviewer screens it
+
+
 if __name__ == "__main__":
     unittest.main()
