@@ -13,6 +13,8 @@ from __future__ import annotations
 import io
 from pathlib import Path
 
+from starlette.concurrency import run_in_threadpool
+
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -111,6 +113,12 @@ async def create_report(background: BackgroundTasks, photo: UploadFile = File(..
         located = pipeline.locate(store(), data, lat, lon, location_id)
     except LookupError as e:
         raise HTTPException(422, str(e))
+    try:
+        await run_in_threadpool(pipeline.validate_resident_photo, data)
+    except pipeline.ResidentPhotoRejected as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except pipeline.ResidentPhotoCheckUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
     loc = located["location"]
     iid, cap = pipeline.new_report(store(), loc["id"], data, note, located)
     background.add_task(_analyse, cap, store().bundle(iid)["reference_path"])

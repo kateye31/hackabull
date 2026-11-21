@@ -98,6 +98,26 @@ def refresh_plan(store: Store, inspection_id: str) -> dict:
     return p
 
 
+class ResidentPhotoRejected(ValueError):
+    pass
+
+
+class ResidentPhotoCheckUnavailable(RuntimeError):
+    pass
+
+
+def validate_resident_photo(image_bytes: bytes):
+    decision = gemini.check_resident_photo(image_bytes)
+    if decision is None:
+        raise ResidentPhotoCheckUnavailable("We couldn't check your photo right now. Please try again shortly.")
+    if decision == "unrelated":
+        raise ResidentPhotoRejected(
+            "Upload a ground-level photo showing the issue, such as a fallen tree, flooding, or storm debris.")
+    if decision == "unclear":
+        raise ResidentPhotoRejected(
+            "We couldn't see the issue clearly. Try a sharper photo that shows the damage and the surrounding area.")
+
+
 def new_report(store: Store, location_id: int, image_bytes: bytes, note: str = "",
                located: dict | None = None) -> tuple[str, SavedCapture]:
     """Open an inspection for a resident's photo and save it (analysis runs separately)."""

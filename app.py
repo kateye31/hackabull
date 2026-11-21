@@ -326,6 +326,13 @@ def page_report():
                         placeholder="e.g. a big branch across the sidewalk, no way past with a wheelchair")
     if img and st.button("Send report", type="primary"):
         image_bytes, demo_path = img
+        if demo_path is None:
+            try:
+                with st.spinner("Checking whether the photo shows the issue…"):
+                    pipeline.validate_resident_photo(image_bytes)
+            except (pipeline.ResidentPhotoRejected, pipeline.ResidentPhotoCheckUnavailable) as exc:
+                st.error(str(exc))
+                return
         iid, cap = pipeline.new_report(store, loc["id"], image_bytes, note)
         with st.status("Checking the photo…", expanded=True) as s:
             pipeline.analyse(store, cap, loc["reference_path"], progress=st.write, demo_path=demo_path)

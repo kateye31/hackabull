@@ -415,8 +415,9 @@ class ResidentsAPI(unittest.TestCase):
         self.assertGreaterEqual(len(spots), 4)
         self.assertEqual(client.get(spots[0]["before_url"]).status_code, 200)
         photo = demo.demo_photo(main.store().location(spots[0]["id"])["reference_path"], "initial").read_bytes()
-        r = client.post("/api/reports", files={"photo": ("p.jpg", photo, "image/jpeg")},
-                        data={"location_id": spots[0]["id"], "note": "Tree down across the sidewalk"})
+        with patch.object(gemini, "check_resident_photo", return_value="relevant"):
+            r = client.post("/api/reports", files={"photo": ("p.jpg", photo, "image/jpeg")},
+                            data={"location_id": spots[0]["id"], "note": "Tree down across the sidewalk"})
         self.assertEqual(r.status_code, 201, r.text)
         rid = r.json()["id"]
         st = client.get(f"/api/reports/{rid}").json()   # background analysis has run by now
@@ -436,6 +437,7 @@ class ResidentsAPI(unittest.TestCase):
         draft = {"available": True, "path_blocked": True, "obstruction_type": "Fallen tree or limbs",
                  "model": "test", "observations": ["Tree across the road."], "regions": [[0.2, 0.2, 0.7, 0.7]]}
         with patch.object(main, "_store", s), patch.object(gemini, "observe", return_value=draft) as observe, \
+             patch.object(gemini, "check_resident_photo", return_value="relevant"), \
              patch.object(vision, "compare", side_effect=AssertionError("Mixed photos cannot be aligned")):
             client = TestClient(main.app)
             before = client.get(f"/api/locations/{loc_id}/before.jpg")
@@ -456,6 +458,27 @@ class ResidentsAPI(unittest.TestCase):
         out = report.build(s.bundle(iid))
         self.assertIn("Initial ground photo", out.html)
         self.assertNotIn("NOAA", out.html)
+
+    def test_photo_screening_rejects_before_creating_a_report(self):
+        from fastapi.testclient import TestClient
+        from api import main
+
+        ref, photo, _ = _pair(blocked=True)
+        s = Store(_TMP / "photo-screening.db")
+        loc = s.add_location("Street photo test", ref)
+        with patch.object(main, "_store", s):
+            client = TestClient(main.app)
+            for decision, status, message in (
+                ("unrelated", 422, "Upload a ground-level photo"),
+                ("unclear", 422, "couldn't see the issue clearly"),
+                (None, 503, "couldn't check your photo right now"),
+            ):
+                with self.subTest(decision=decision), patch.object(gemini, "check_resident_photo", return_value=decision):
+                    response = client.post("/api/reports", files={"photo": ("upload.jpg", photo.read_bytes(), "image/jpeg")},
+                                           data={"location_id": loc})
+                    self.assertEqual(response.status_code, status)
+                    self.assertIn(message, response.json()["detail"])
+                    self.assertEqual(s.inspections(), [])
 
     def test_rejects_bad_input(self):
         from fastapi.testclient import TestClient
