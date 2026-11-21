@@ -12,9 +12,10 @@ Hands off: a saved image with its inspection ID and phase (`SavedCapture`) to Pe
 - [x] Review form: type, severity, description (pre-filled from Gemini), reviewer, confirmation box
 - [x] Resolution: confirm resolved / still blocked / retake; dismiss false alarms
 - [x] Demo locations so the demo works without a camera
-- [ ] Take real clear-path reference photos at 2–3 campus spots (note where you stood)
-- [ ] Test the webcam flow on the demo laptop, in the room you'll present in
-- [ ] Rehearse the demo end to end; keep a backup run on demo photos
+- [x] Real-photo import (`python -m clearpath.demo real`), preflight check (`python -m clearpath.preflight`), playbook in [DEMO.md](DEMO.md)
+- [ ] Take real clear-path reference photos at 2–3 campus spots (note where you stood); import with `--eval` so Person 2 gets the pairs ([DEMO.md §1](DEMO.md#1-photo-shoot-on-campus-about-30-minutes))
+- [ ] Test the webcam flow on the demo laptop, in the room you'll present in ([DEMO.md §2](DEMO.md#2-laptop-check-in-the-presenting-room))
+- [ ] Rehearse the demo end to end; keep a backup run on demo photos ([DEMO.md §3–4](DEMO.md#3-demo-script-about-3-minutes))
 
 ## Person 2: Vision and data (`vision-data`)
 

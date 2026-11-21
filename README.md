@@ -36,7 +36,9 @@ Checklists per person: [docs/PLAN.md](docs/PLAN.md). The hand-off types live in 
 | --- | --- | --- |
 | [app.py](app.py) | 1 | Streamlit app: locations, inspect flow, review form, report, follow-up |
 | [clearpath/capture.py](clearpath/capture.py) | 1 | Saves webcam/upload photos as `SavedCapture` (fixes rotation, strips EXIF/GPS) |
-| [clearpath/demo.py](clearpath/demo.py) | 1 | Demo walkways so the app runs without a camera |
+| [clearpath/demo.py](clearpath/demo.py) | 1 | Demo walkways so the app runs without a camera; `demo real` imports your own campus photos as a backup run |
+| [clearpath/preflight.py](clearpath/preflight.py) | 1 | `python -m clearpath.preflight`: checks the demo laptop (DINOv2 cached, camera, Gemini, channels, photos) |
+| [docs/DEMO.md](docs/DEMO.md) | 1 | Photo shoot, room check, demo script and backup plan |
 | [clearpath/vision/](clearpath/vision/) | 2 | `compare()` → `ComparisonResult`: alignment, DINOv2 patch comparison, OpenCV baseline, overlay |
 | [clearpath/store.py](clearpath/store.py) | 2 | SQLite: locations, inspections, captures, results, reviews, reports, history |
 | [evaluation/](evaluation/) | 2 | Synthetic test pairs and the DINOv2-vs-OpenCV scorecard |

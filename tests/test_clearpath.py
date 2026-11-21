@@ -1,4 +1,5 @@
 """python -m unittest -v"""
+import importlib
 import os
 import shutil
 import tempfile
@@ -13,7 +14,13 @@ os.environ.pop("GOOGLE_API_KEY", None)
 import cv2  # noqa: E402
 import numpy as np  # noqa: E402
 
-from clearpath import config, vision  # noqa: E402
+from clearpath import config, demo, vision  # noqa: E402
+
+# `python -m unittest` discovery imports the clearpath package before this file runs,
+# so config already holds the REAL data folder. Reload so tests never touch it.
+importlib.reload(config)
+importlib.reload(demo)
+assert config.DATA == _TMP and demo.DEMO.parent == _TMP, "tests must not write to the real data folder"
 from clearpath.contracts import ReviewedDetails, SavedCapture  # noqa: E402
 from clearpath.reporting import channels, gemini, report  # noqa: E402
 from clearpath.store import Store, now  # noqa: E402
@@ -112,6 +119,41 @@ class Reporting(unittest.TestCase):
     def test_gemini_without_key(self):
         config.GEMINI_API_KEY = None
         self.assertFalse(gemini.observe("a.jpg", "b.jpg")["available"])
+
+
+class RealDemoPhotos(unittest.TestCase):
+    def test_import_real_photos_and_eval_pairs(self):
+
+        ref, cap, d = _pair(blocked=True)
+        shoot = Path(tempfile.mkdtemp(dir=_TMP))
+        shutil.copy(ref, shoot / "reference.JPG")
+        shutil.copy(cap, shoot / "blocked.jpeg")
+        shutil.copy(ref, shoot / "cleared.jpg")
+        s = Store(_TMP / "real.db")
+        eval_root = _TMP / "eval-real"
+        demo.EVAL_REAL, old = eval_root, demo.EVAL_REAL
+        try:
+            loc_id = demo.add_real("Library ramp / east", shoot, "Top landing, facing south", s, to_eval=True)
+        finally:
+            demo.EVAL_REAL = old
+        loc = s.location(loc_id)
+        self.assertIn("Top landing", loc["description"])
+        self.assertTrue(demo.demo_photo(loc["reference_path"], "initial"))
+        self.assertTrue(demo.demo_photo(loc["reference_path"], "follow_up"))
+        labels = (eval_root / "labels.csv").read_text().splitlines()
+        self.assertIn("library-ramp---east-blocked,obstructed,,", labels)
+        self.assertIn("library-ramp---east-cleared,clear,,", labels)
+        self.assertTrue((eval_root / "library-ramp---east-blocked" / "capture.jpg").exists())
+        with self.assertRaises(ValueError):
+            demo.add_real("Library ramp / east", shoot, store=s)
+
+    def test_missing_blocked_photo(self):
+
+        ref, _, _ = _pair(blocked=False)
+        shoot = Path(tempfile.mkdtemp(dir=_TMP))
+        shutil.copy(ref, shoot / "reference.jpg")
+        with self.assertRaises(FileNotFoundError):
+            demo.add_real("Nowhere", shoot, store=Store(_TMP / "real2.db"))
 
 
 class AppFlow(unittest.TestCase):
