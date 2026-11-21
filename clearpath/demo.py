@@ -1,13 +1,9 @@
 """Demo locations so the app works with no webcam (Person 1).
 
-    python -m clearpath.demo                    # four synthetic routes after a storm
+    python -m clearpath.demo                    # real Tampa Bay overhead imagery
     python -m clearpath.demo real "Palm St bus stop" photos/palm-bus --where "Next to the hydrant, facing the shelter"
     python -m clearpath.demo real "Palm St bus stop" photos/palm-bus --eval   # also give Person 2 the pairs
     python -m clearpath.demo list
-
-Synthetic: creates four neighborhood routes under data/demo/<slug>/ with reference.jpg
-(before the storm), initial.jpg (storm damage: fallen tree, debris, branches, flooding),
-followup.jpg (after cleanup, different light/angle).
 
 Real: takes a folder of your own neighborhood photos named
     reference.*   the route before the storm, clear     (required)
@@ -25,24 +21,12 @@ import shutil
 import sys
 from pathlib import Path
 
-import cv2
-import numpy as np
-
 from . import config, geo
 from .capture import _to_jpeg
 from .store import Store
 
 DEMO = config.DATA / "demo"
 EVAL_REAL = config.DATA / "eval" / "real"
-SPOTS = [
-    # seeds picked so DINOv2 says obstructed after the storm and clear after cleanup
-    ("Palm Street sidewalk", "tree", 3),
-    ("Bayview Avenue curb ramp", "debris", 5),             # OpenCV baseline misses this one: good for the pitch
-    ("Walkway to the community center", "branches", 3),
-    ("5th Avenue bus stop", "water", 6),
-]
-# where the demo spots sit around config.DEMO_CENTER (metres north, east)
-SPOT_OFFSETS_M = [(0, 0), (180, -120), (-150, 160), (90, 260)]
 IMAGE_EXT = (".jpg", ".jpeg", ".png", ".webp")
 # output file in data/demo/<slug>/  ->  accepted input names (without extension)
 REAL_FILES = {
@@ -62,31 +46,34 @@ def slug(name: str) -> str:
 
 
 def seed(store: Store | None = None) -> int:
-    from evaluation.make_synthetic import obstacle, recapture, scene
+    """Register the verified Tampa Bay presets, reusing downloaded imagery when available."""
+    from . import satellite
 
     store = store or Store()
-    existing = {l["name"] for l in store.locations()}
-    made = 0
-    for name, kind, seed_ in SPOTS:
+    existing = {loc["name"] for loc in store.locations()}
+    added = 0
+    failures = []
+    for site in satellite.PRESETS:
+        name = site["name"]
         if name in existing:
             continue
-        rng = np.random.default_rng(seed_)
-        base, path = scene(rng)
-        ref = np.clip(base, 0, 255).astype(np.uint8)
-        blocked = base.copy()
-        obstacle(blocked, rng, path, kind)
-        d = DEMO / name.lower().replace(" ", "-")
-        d.mkdir(parents=True, exist_ok=True)
-        for fname, img in (("reference.jpg", ref), ("initial.jpg", recapture(blocked, rng, hard=False)),
-                           ("followup.jpg", recapture(base, rng, hard=False))):
-            cv2.imwrite(str(d / fname), cv2.cvtColor(img, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 90])
-        loc_id = store.add_location(name, d / "reference.jpg", f"Demo route after a storm (synthetic). Damage: {kind}.")
-        north, east = SPOT_OFFSETS_M[len(existing) + made] if len(existing) + made < len(SPOT_OFFSETS_M) else (0, 0)
-        lat, lon = geo.offset(*config.DEMO_CENTER, north, east)
-        from .pipeline import add_geo  # satellite image + canopy; skipped quietly when offline
-        add_geo(store, loc_id, lat, lon)
-        made += 1
-    return made
+        lat, lon = site["lat"], site["lon"]
+        directory = satellite.SITES_DIR / satellite.slug(name)
+        reference = directory / "reference.jpg"
+        try:
+            if not reference.is_file() or not satellite.imagery_for(reference, reference):
+                if config.OFFLINE:
+                    raise RuntimeError("Imagery isn't cached and offline mode is enabled.")
+                satellite.make_site(name, lat, lon, site["before"], site["after"], register=False)
+            info = satellite.imagery_for(reference, reference)
+            location_id = store.add_location(name, reference, satellite._describe_reference(info))
+            satellite._connect(store, location_id, directory, lat, lon)
+            added += 1
+        except (OSError, ValueError, RuntimeError) as exc:
+            failures.append(f"{name}: {exc}")
+    if failures:
+        raise RuntimeError("Some demo locations couldn't be loaded. " + " ".join(failures))
+    return added
 
 
 def _find(folder: Path, stems: tuple[str, ...]) -> Path | None:
@@ -196,34 +183,13 @@ def main(argv=None) -> int:
             demo_ = ", ".join(ph for ph in ("initial", "follow_up") if demo_photo(ref, ph)) or "camera/upload only"
             print(f"{ok:7s} {l['name']:32s} demo photos: {demo_}")
         return 0
-    print(f"added {seed()} demo locations")
+    try:
+        print(f"added {seed()} demo locations")
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
     return 0
 
 
 if __name__ == "__main__":
     sys.exit(main())
-
-
-def synthetic_after_aerial(before_path: str | Path, seed: int = 0) -> bytes:
-    """A SYNTHETIC after-storm aerial for demos: the real before-storm tile with drawn storm damage
-    (fallen tree crowns across the middle, a muddy flood patch, scattered debris). Not real imagery."""
-    img = cv2.cvtColor(cv2.imread(str(before_path)), cv2.COLOR_BGR2RGB).astype(np.float32)
-    rng = np.random.default_rng(seed)
-    h, w = img.shape[:2]
-    flood = np.zeros((h, w), np.uint8)
-    cv2.ellipse(flood, (int(w * 0.62), int(h * 0.62)), (int(w * 0.2), int(h * 0.12)), 15, 0, 360, 1, -1)
-    f = cv2.GaussianBlur(flood.astype(np.float32), (0, 0), 6)[..., None]
-    img = img * (1 - 0.85 * f) + np.array([118, 104, 78], np.float32) * (0.85 * f)
-    for _ in range(4):  # fallen crowns: dark green blobs with a brown trunk
-        cx, cy = int(rng.uniform(0.25, 0.6) * w), int(rng.uniform(0.25, 0.6) * h)
-        ang = rng.uniform(0, np.pi)
-        L = int(rng.uniform(0.08, 0.14) * w)
-        p2 = (int(cx + L * np.cos(ang)), int(cy + L * np.sin(ang)))
-        cv2.line(img, (cx, cy), p2, (92, 68, 44), 4)
-        cv2.circle(img, p2, int(L * 0.45), (38, 70, 34), -1)
-    for _ in range(25):  # debris: small light/dark fragments
-        x, y = int(rng.uniform(0.2, 0.8) * w), int(rng.uniform(0.2, 0.8) * h)
-        cv2.rectangle(img, (x, y), (x + int(rng.integers(3, 9)), y + int(rng.integers(2, 6))),
-                      tuple(int(v) for v in rng.choice([(200, 190, 170), (70, 70, 75), (40, 90, 170)])), -1)
-    ok, buf = cv2.imencode(".jpg", cv2.cvtColor(np.clip(img, 0, 255).astype(np.uint8), cv2.COLOR_RGB2BGR))
-    return buf.tobytes()

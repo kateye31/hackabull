@@ -13,6 +13,8 @@ from __future__ import annotations
 import io
 from pathlib import Path
 
+from starlette.concurrency import run_in_threadpool
+
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -74,6 +76,11 @@ def _location_file(location_id: int, key: str) -> FileResponse:
 
 @app.get("/api/locations/{location_id}/before.jpg")
 def before_photo(location_id: int):
+    loc = store().location(location_id)
+    if loc:
+        aerial = pipeline.aerial_reference(loc["reference_path"], loc)
+        if aerial and Path(aerial).is_file():
+            return FileResponse(aerial, media_type="image/jpeg", headers={"Cache-Control": "max-age=3600"})
     return _location_file(location_id, "reference_path")
 
 
@@ -106,6 +113,12 @@ async def create_report(background: BackgroundTasks, photo: UploadFile = File(..
         located = pipeline.locate(store(), data, lat, lon, location_id)
     except LookupError as e:
         raise HTTPException(422, str(e))
+    try:
+        await run_in_threadpool(pipeline.validate_resident_photo, data)
+    except pipeline.ResidentPhotoRejected as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except pipeline.ResidentPhotoCheckUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
     loc = located["location"]
     iid, cap = pipeline.new_report(store(), loc["id"], data, note, located)
     background.add_task(_analyse, cap, store().bundle(iid)["reference_path"])
@@ -120,8 +133,9 @@ def report_status(report_id: str):
         raise HTTPException(404, "No report with that number.")
     ins = b["inspection"]
     failed = any((e["note"] or "").startswith("Automatic check failed") for e in b["events"])
-    # still working until the photo is compared AND the plan (with nearby help) exists
-    processing = not failed and not (b["initial"] and b["initial"].get("comparison") and b.get("plan"))
+    initial = b["initial"] or {}
+    checked = initial.get("comparison") or (initial.get("observation") or {}).get("mode") == "mixed"
+    processing = not failed and not (checked and b.get("plan"))
     help_ = []
     near = (b.get("plan") or {}).get("nearby", {})
     for cat in PUBLIC_HELP:

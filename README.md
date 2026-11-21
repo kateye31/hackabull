@@ -19,7 +19,7 @@ streamlit run app.py                          # the reviewer app: http://localho
 uvicorn api.main:app --port 8000              # the residents' website + API: http://localhost:8000
 ```
 
-Both read and write the same SQLite database (`data/`). In the reviewer app, go to **Before-storm photos → Add demo locations**: four demo routes in a residential area of Tampa, each with a real USGS satellite image and nearby help from OpenStreetMap (set `CLEARPATH_DEMO_CENTER=lat,lon` for another neighborhood). Then send a report from the residents' website (**Demo photo** works without a camera) and open it in the reviewer's **Review queue**.
+Both read and write the same SQLite database (`data/`). In the reviewer app, go to **Locations → Add real Tampa Bay demo locations**. The presets load dated Esri Wayback before images and NOAA after imagery for Davis Islands, South Tampa, and Madeira Beach. Use the residents' website to upload a ground-level photo, or choose **Demo photo** in Streamlit to inspect the NOAA aerial pair.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
@@ -90,7 +90,7 @@ With W = walkable surface in the before-storm photo (SegFormer) and C = the DINO
 A top-down satellite image and a street-level photo share almost nothing pixel to pixel, so they are not compared directly. Instead:
 
 1. **Before-storm satellite** (USGS NAIP, ~0.6 m/pixel, public domain) for each spot: map context and tree-canopy risk.
-2. **Before vs after from above**: upload a NOAA post-storm aerial or a drone photo taken straight down on **Before-storm photos → After-storm aerial**. DINOv2 compares the two top-down images; RemoteCLIP says what shifted (e.g. "+44% flooded"). **Demo: synthetic damage** draws storm damage onto the real tile and is always labelled SYNTHETIC.
+2. **Before vs after from above**: upload a NOAA post-storm aerial or a drone photo taken straight down on **Before-storm photos → After-storm aerial**. DINOv2 compares the two top-down images; RemoteCLIP says what shifted (e.g. "+44% flooded").
 3. **Consistency check** on every report: does the view from above support the ground photo? (A fallen tree reported where there's almost no canopy gets flagged.)
 4. **Person 3's real hurricane sites** (`python -m clearpath.satellite --demo`): Davis Islands, South Tampa and Madeira Beach, with Esri Wayback imagery from before the storms and NOAA aerials flown after Helene and Milton. They appear on both maps, get nearby help, and their reports use Gemini's aerial prompt and RemoteCLIP instead of the ground-photo models.
 

@@ -174,6 +174,8 @@ class Satellite(unittest.TestCase):
         import json
         from clearpath import satellite
         ref, cap, d = _pair(blocked=True)
+        ref = ref.rename(d / "reference.jpg")
+        cap = cap.rename(d / "initial.jpg")
         info = {"spec": "x", "source": "esri", "layer": "1", "label": "Esri Wayback 2024-09-19",
                 "captured": "2023-02-26", "detail": "", "attribution": "", "lat": 27.9, "lon": -82.4, "zoom": 19}
         meta = {"name": "Street", "lat": 27.92650, "lon": -82.45550, "zoom": 19,
@@ -190,7 +192,7 @@ class Satellite(unittest.TestCase):
 
     def test_prompt_switches_to_aerial(self):
         ref, cap, _ = self._site()
-        mode, prompt = gemini.build_prompt(ref)
+        mode, prompt = gemini.build_prompt(ref, capture_path=cap)
         self.assertEqual(mode, "aerial")
         self.assertIn("NOAA NGS 20241014a-rgb", prompt)
         self.assertIn("captured 2023-02-26", prompt)
@@ -198,11 +200,13 @@ class Satellite(unittest.TestCase):
         self.assertEqual(mode, "ground")
 
     def test_report_has_coordinates_and_credits(self):
-        ref, cap, _ = self._site()
+        ref, cap, satellite = self._site()
         s = Store(_TMP / "sat.db")
         iid = s.new_inspection(s.add_location("Street", ref))
         c = s.add_capture(SavedCapture(iid, "initial", cap, now()))
-        s.save_comparison(c.capture_id, vision.compare(ref, cap, cap.with_name("o.png"), method="opencv"))
+        comparison = vision.compare(ref, cap, cap.with_name("o.png"), method="opencv")
+        comparison.details["imagery"] = satellite.imagery_for(ref, cap)
+        s.save_comparison(c.capture_id, comparison)
         s.save_review(iid, ReviewedDetails("Storm debris pile", "Partly blocked: passable with difficulty",
                                            "Debris at the curb.", "", "Sam", True, now()))
         out = report.build(s.bundle(iid))
@@ -223,8 +227,11 @@ class AppFlow(unittest.TestCase):
 
     def test_resident_reports_then_reviewer_clears(self):
         at = self._demo_app()
-        at.sidebar.radio[0].set_value("Locations").run()
-        next(b for b in at.button if "demo" in b.label).click().run()
+        ref, blocked, directory = _pair(blocked=True)
+        shutil.copyfile(ref, directory / "reference.jpg")
+        shutil.copyfile(blocked, directory / "blocked.jpg")
+        shutil.copyfile(ref, directory / "cleared.jpg")
+        demo.add_real("Test walkway", directory)
         # resident: one photo and a note
         at.sidebar.radio[0].set_value("Report damage").run()
         at.text_area[0].set_value("Big branch across the sidewalk, no way past with a wheelchair.")
@@ -406,13 +413,17 @@ class ResidentsAPI(unittest.TestCase):
         from api import main
         main._store = None
         client = TestClient(main.app)
-        demo.seed(main.store())
+        ref, capture_path, _ = _pair(blocked=True)
+        loc_id = main.store().add_location("API test walkway", ref)
+        main.store().add_location("Legacy fake", ref, "Demo route after a storm (synthetic). Damage: tree.")
         spots = client.get("/api/locations").json()
-        self.assertGreaterEqual(len(spots), 4)
-        self.assertEqual(client.get(spots[0]["before_url"]).status_code, 200)
-        photo = demo.demo_photo(main.store().location(spots[0]["id"])["reference_path"], "initial").read_bytes()
-        r = client.post("/api/reports", files={"photo": ("p.jpg", photo, "image/jpeg")},
-                        data={"location_id": spots[0]["id"], "note": "Tree down across the sidewalk"})
+        self.assertNotIn("Legacy fake", [spot["name"] for spot in spots])
+        spot = next(spot for spot in spots if spot["id"] == loc_id)
+        self.assertEqual(client.get(spot["before_url"]).status_code, 200)
+        photo = capture_path.read_bytes()
+        with patch.object(gemini, "check_resident_photo", return_value="relevant"):
+            r = client.post("/api/reports", files={"photo": ("p.jpg", photo, "image/jpeg")},
+                            data={"location_id": loc_id, "note": "Tree down across the sidewalk"})
         self.assertEqual(r.status_code, 201, r.text)
         rid = r.json()["id"]
         st = client.get(f"/api/reports/{rid}").json()   # background analysis has run by now
@@ -421,6 +432,59 @@ class ResidentsAPI(unittest.TestCase):
         events = main.store().bundle(rid)["events"]
         self.assertTrue(any((e["note"] or "").startswith("Resident: Tree down") for e in events))
         self.assertIsNotNone(main.store().bundle(rid)["plan"])
+
+    def test_ground_upload_uses_satellite_before_and_finishes_processing(self):
+        from fastapi.testclient import TestClient
+        from api import main
+
+        ref, photo, _ = Satellite()._site()
+        s = Store(_TMP / "mixed-api.db")
+        loc_id = s.add_location("Aerial test location", ref)
+        draft = {"available": True, "path_blocked": True, "obstruction_type": "Fallen tree or limbs",
+                 "model": "test", "observations": ["Tree across the road."], "regions": [[0.2, 0.2, 0.7, 0.7]]}
+        with patch.object(main, "_store", s), patch.object(gemini, "observe", return_value=draft) as observe, \
+             patch.object(gemini, "check_resident_photo", return_value="relevant"), \
+             patch.object(vision, "compare", side_effect=AssertionError("Mixed photos cannot be aligned")):
+            client = TestClient(main.app)
+            before = client.get(f"/api/locations/{loc_id}/before.jpg")
+            self.assertEqual(before.content, ref.read_bytes())
+            response = client.post("/api/reports", files={"photo": ("initial.jpg", photo.read_bytes(), "image/jpeg")},
+                                   data={"location_id": loc_id})
+            self.assertEqual(response.status_code, 201, response.text)
+            iid = response.json()["id"]
+            self.assertFalse(client.get(f"/api/reports/{iid}").json()["processing"])
+        self.assertEqual(observe.call_args.args[0], str(ref))
+        self.assertEqual(observe.call_args.kwargs["imagery"]["mode"], "mixed")
+        self.assertEqual(observe.call_args.kwargs["imagery"]["before"]["captured"], "2023-02-26")
+        bundle = s.bundle(iid)
+        self.assertIsNone(bundle["initial"]["comparison"])
+        self.assertTrue(Path(bundle["initial"]["observation"]["overlay_path"]).is_file())
+        s.save_review(iid, ReviewedDetails("Fallen tree or limbs", "Partly blocked: passable with difficulty",
+                                           "Tree across the road.", "", "Sam", True, now()))
+        out = report.build(s.bundle(iid))
+        self.assertIn("Initial ground photo", out.html)
+        self.assertNotIn("NOAA", out.html)
+
+    def test_photo_screening_rejects_before_creating_a_report(self):
+        from fastapi.testclient import TestClient
+        from api import main
+
+        ref, photo, _ = _pair(blocked=True)
+        s = Store(_TMP / "photo-screening.db")
+        loc = s.add_location("Street photo test", ref)
+        with patch.object(main, "_store", s):
+            client = TestClient(main.app)
+            for decision, status, message in (
+                ("unrelated", 422, "Upload a ground-level photo"),
+                ("unclear", 422, "couldn't see the issue clearly"),
+                (None, 503, "couldn't check your photo right now"),
+            ):
+                with self.subTest(decision=decision), patch.object(gemini, "check_resident_photo", return_value=decision):
+                    response = client.post("/api/reports", files={"photo": ("upload.jpg", photo.read_bytes(), "image/jpeg")},
+                                           data={"location_id": loc})
+                    self.assertEqual(response.status_code, status)
+                    self.assertIn(message, response.json()["detail"])
+                    self.assertEqual(s.inspections(), [])
 
     def test_rejects_bad_input(self):
         from fastapi.testclient import TestClient

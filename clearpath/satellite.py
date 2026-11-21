@@ -247,7 +247,7 @@ def slug(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
 
-def make_site(name: str, lat: float, lon: float, before: str, after: str, followup: str | None = None,
+def make_site(name: str, lat: float, lon: float, before: str, after: str | None, followup: str | None = None,
               zoom: int = 19, size: int = 768, register: bool = True) -> Path:
     """Fetch reference/initial/(followup) images, write site.json, optionally register a Location."""
     d = SITES_DIR / slug(name)
@@ -275,11 +275,14 @@ def make_site(name: str, lat: float, lon: float, before: str, after: str, follow
             loc_id = existing[name]["id"]
         else:
             ref = meta["images"]["reference.jpg"]
-            loc_id = store.add_location(name, d / "reference.jpg",
-                                        f"Aerial site at {lat:.5f}, {lon:.5f}. Reference: {ref['label']}"
-                                        + (f" (captured {ref['captured']})" if ref["captured"] else "") + ".")
+            loc_id = store.add_location(name, d / "reference.jpg", _describe_reference(ref))
         _connect(store, loc_id, d, lat, lon)
     return d
+
+
+def _describe_reference(info: dict) -> str:
+    return f"Overhead reference: {info['label']}" + (
+        f" · captured {info['captured']}" if info.get("captured") else "")
 
 
 def _connect(store, loc_id: int, d: Path, lat: float, lon: float):
@@ -289,7 +292,7 @@ def _connect(store, loc_id: int, d: Path, lat: float, lon: float):
     from .reporting import resources
     store.set_location_geo(loc_id, lat, lon, str(d / "reference.jpg"), geo.canopy_fraction(d / "reference.jpg"))
     resources.fetch(lat, lon)
-    if (d / "initial.jpg").exists():
+    if imagery_for(d / "reference.jpg", d / "initial.jpg") and (d / "initial.jpg").exists():
         from .vision import aerial
         result = aerial.compare_aerial(d / "reference.jpg", d / "initial.jpg", config.OVERLAYS / f"aerial_loc{loc_id}.png")
         result["synthetic"] = False
@@ -303,8 +306,11 @@ def site_meta(reference_path: str | Path) -> dict | None:
 
 
 def imagery_for(reference_path: str | Path, image_path: str | Path) -> dict | None:
+    image_path = Path(image_path)
+    if image_path.resolve().parent != Path(reference_path).resolve().parent:
+        return None
     meta = site_meta(reference_path)
-    return (meta or {}).get("images", {}).get(Path(image_path).name) if meta else None
+    return (meta or {}).get("images", {}).get(image_path.name)
 
 
 def maps_link(lat: float, lon: float) -> str:
@@ -320,6 +326,7 @@ def main(argv=None):
     ap.add_argument("--followup", default="esri:latest")
     ap.add_argument("--zoom", type=int, default=19)
     ap.add_argument("--preview", action="store_true", help="write images but don't register a location")
+    ap.add_argument("--reference-only", action="store_true", help="fetch only the before image for ground photo uploads")
     ap.add_argument("--list-esri", action="store_true", help="print Esri Wayback release dates")
     a = ap.parse_args(argv)
     config.ensure_dirs()
@@ -333,7 +340,9 @@ def main(argv=None):
         ap.error("--name, --lat and --lon are required (or use --demo)")
     for s in sites:
         try:
-            d = make_site(s["name"], s["lat"], s["lon"], s["before"], s["after"], s.get("followup"),
+            after = None if a.reference_only else s["after"]
+            followup = None if a.reference_only else s.get("followup")
+            d = make_site(s["name"], s["lat"], s["lon"], s["before"], after, followup,
                           zoom=a.zoom, register=not a.preview)
             meta = json.loads((d / "site.json").read_text())
             print(f"OK  {s['name']} -> {d}")

@@ -56,9 +56,14 @@ python -m clearpath.satellite --name "Bayshore & Howard" --lat 27.9301 --lon -82
   ```
   It prints the structured JSON and saves `gemini_boxes.jpg` with the boxes Gemini drew. Without a
   key, it prints the exact prompt it would send.
-- The mode is chosen automatically. Locations made by `clearpath.satellite` use the **aerial**
-  prompt, which is told about the image sources and dates and told to ignore colour and shadow
-  differences. Webcam photos use the **ground** prompt.
+- For an existing satellite location, open **Inspect**, select the location, then choose
+  **Upload** or **Camera** and submit a ground-level photo of the obstruction. The satellite
+  image is the before reference. Gemini uses the ground photo to identify visible hazards
+  and the satellite view for location context. The reviewer sees both images and any Gemini
+  markings on the submitted photo.
+- Add `--reference-only` to the satellite setup command to register a site without fetching
+  a post-storm aerial image. A prepared **Demo photo** uses aerial-to-aerial comparison.
+  Locations with a ground-level reference use ground-to-ground comparison.
 - Output fields: `path_blocked`, `obstruction_type` (from `OBSTRUCTION_TYPES`), `observations`,
   `accessibility_impact`, `suggested_action`, `confidence`, and `regions` (0–1 boxes).
 - Tuning: run it on every site, compare the output with what you can see, and edit
@@ -106,3 +111,21 @@ is only needed if you demo that preset, because it isn't City of Tampa.
   debris piles and sand on roads, but not individual small objects.
 - Limits: aerial images show only what's visible from above (not under tree canopy), and the
   imagery dates are fixed, so they aren't live. A person still confirms every report.
+
+## South Tampa ground-upload rehearsal
+
+Use the **South Tampa near Bayshore (Tampa)** preset. Its Esri Wayback reference is
+centered at [27.89350, -82.48900](https://www.openstreetmap.org/?mlat=27.89350&mlon=-82.48900#map=19/27.89350/-82.48900)
+and was captured on February 26, 2023. If the site isn't registered on the demo
+laptop, run `python -m clearpath.satellite --demo --reference-only`.
+
+Take a ground photo of the same road or sidewalk segment from the sidewalk.
+For a staged demo, use a property or space where you have permission and keep
+the travel lanes clear. Frame the object and enough of the usable path to show
+its effect. Take a second photo after cleanup. In the residents' site, choose
+the preset and upload the ground photo. In the reviewer queue, confirm the
+obstruction, export the report, then upload the cleanup photo as a follow-up.
+
+The real ground photo and cleanup photo are still pending. The FEMA gallery
+[Flooded Tampa Streets After Hurricane Milton](https://www.dvidshub.net/image/8695671/flooded-tampa-streets-after-hurricane-milton)
+shows Tampa storm damage, but its caption doesn't identify the street.

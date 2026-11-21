@@ -6,9 +6,10 @@ and the residents' backend (api/main.py), so both behave the same.
 """
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Callable
 
-from . import capture, config, geo, vision
+from . import capture, config, geo, satellite, vision
 from .contracts import ComparisonResult, SavedCapture
 from .reporting import gemini, plan, resources
 from .store import Store
@@ -50,9 +51,18 @@ def save_photo(store: Store, inspection_id: str, phase: str, image_bytes: bytes)
     return store.add_capture(capture.save_capture(image_bytes, inspection_id, phase))
 
 
-def analyse(store: Store, cap: SavedCapture, reference_path: str, progress: Callable[[str], None] = _noop):
-    progress("Comparing with the before-storm photo")
+def aerial_reference(reference_path: str, location: dict) -> str | None:
+    """Prefer a dated satellite site; use stored overhead imagery as context otherwise."""
+    if satellite.site_meta(reference_path):
+        return reference_path
+    path = location.get("satellite_path")
+    return path if path and Path(path).is_file() else None
+
+
+def analyse(store: Store, cap: SavedCapture, reference_path: str, progress: Callable[[str], None] = _noop,
+            *, demo_path: Path | None = None):
     overlay = config.OVERLAYS / cap.inspection_id / f"{cap.phase}_{cap.capture_id}.png"
+<<<<<<< HEAD
     from .satellite import site_meta  # Person 3's aerial sites (Esri before / NOAA after)
     aerial_site = site_meta(reference_path) is not None
     street = aerial_site and _is_street_photo(cap.image_path)
@@ -66,6 +76,33 @@ def analyse(store: Store, cap: SavedCapture, reference_path: str, progress: Call
         store.save_observation(cap.capture_id, gemini.observe(
             reference_path, cap.image_path, None if street else result.to_dict(),
             imagery={} if street else None))  # {} = ground prompt even at an aerial site
+=======
+    location = store.bundle(cap.inspection_id)["location"]
+    overhead = aerial_reference(reference_path, location)
+    after = satellite.imagery_for(reference_path, demo_path) if demo_path else None
+    before = satellite.imagery_for(reference_path, reference_path)
+    result = None
+    if overhead and not demo_path:
+        progress("Reviewing the ground photo with the satellite reference")
+        imagery = {"mode": "mixed", "before": before}
+        obs = gemini.observe(overhead, cap.image_path, imagery=imagery)
+        obs.update(mode="mixed", reference_path=overhead)
+        if gemini.draw_regions(cap.image_path, obs.get("regions", []), overlay):
+            obs["overlay_path"] = str(overlay)
+        store.save_observation(cap.capture_id, obs)
+    else:
+        progress("Comparing with the before-storm photo")
+        result: ComparisonResult = vision.compare(reference_path, cap.image_path, overlay, aerial=bool(after))
+        if after:
+            result.details["imagery"] = after
+        store.save_comparison(cap.capture_id, result)
+        if cap.phase == "initial":
+            progress("Asking Gemini what it sees")
+            imagery = {"before": before, "after": after} if after else None
+            store.save_observation(cap.capture_id, gemini.observe(
+                reference_path, cap.image_path, result.to_dict(), imagery=imagery))
+    if cap.phase == "initial":
+>>>>>>> 0eff66b268e21425adb8f163193cde02fc18fddc
         progress("Finding crews and resources nearby")
         refresh_plan(store, cap.inspection_id)
     return result
@@ -111,6 +148,26 @@ def refresh_plan(store: Store, inspection_id: str) -> dict:
     return p
 
 
+class ResidentPhotoRejected(ValueError):
+    pass
+
+
+class ResidentPhotoCheckUnavailable(RuntimeError):
+    pass
+
+
+def validate_resident_photo(image_bytes: bytes):
+    decision = gemini.check_resident_photo(image_bytes)
+    if decision is None:
+        raise ResidentPhotoCheckUnavailable("We couldn't check your photo right now. Please try again shortly.")
+    if decision == "unrelated":
+        raise ResidentPhotoRejected(
+            "Upload a ground-level photo showing the issue, such as a fallen tree, flooding, or storm debris.")
+    if decision == "unclear":
+        raise ResidentPhotoRejected(
+            "We couldn't see the issue clearly. Try a sharper photo that shows the damage and the surrounding area.")
+
+
 def new_report(store: Store, location_id: int, image_bytes: bytes, note: str = "",
                located: dict | None = None) -> tuple[str, SavedCapture]:
     """Open an inspection for a resident's photo and save it (analysis runs separately)."""
@@ -122,7 +179,7 @@ def new_report(store: Store, location_id: int, image_bytes: bytes, note: str = "
     return iid, save_photo(store, iid, "initial", image_bytes)
 
 
-def add_after_aerial(store: Store, location_id: int, image_bytes: bytes, synthetic: bool = False) -> dict:
+def add_after_aerial(store: Store, location_id: int, image_bytes: bytes) -> dict:
     """An after-storm aerial (NOAA post-storm flight or a drone photo taken straight down) for a spot,
     compared with its before-storm satellite image."""
     from .vision import aerial
@@ -132,6 +189,5 @@ def add_after_aerial(store: Store, location_id: int, image_bytes: bytes, synthet
     dest = config.SATELLITE / f"loc{location_id}_after.jpg"
     capture._to_jpeg(image_bytes, dest)  # strips EXIF like every other photo
     result = aerial.compare_aerial(loc["satellite_path"], dest, config.OVERLAYS / f"aerial_loc{location_id}.png")
-    result["synthetic"] = synthetic  # drawn demo damage, never real imagery: always labelled in the UI
     store.set_aerial(location_id, str(dest), result)
     return result
