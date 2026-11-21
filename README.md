@@ -77,6 +77,10 @@ A top-down satellite image and a street-level photo share almost nothing pixel t
 2. **Before vs after from above**: upload a NOAA post-storm aerial or a drone photo taken straight down on **Before-storm photos → After-storm aerial**. DINOv2 compares the two top-down images; RemoteCLIP says what shifted (e.g. "+44% flooded"). **Demo: synthetic damage** draws storm damage onto the real tile and is always labelled SYNTHETIC.
 3. **Consistency check** on every report: does the view from above support the ground photo? (A fallen tree reported where there's almost no canopy gets flagged.)
 
+## Maps
+
+Both sites use Leaflet with a **Streets / Satellite** switch (OpenStreetMap tiles, USGS The National Map imagery). On the residents' site, tap a spot's pin to choose it; "Use my location" shows where you are; after sending, a numbered map of nearby help matches the list. In the reviewer app ([clearpath/mapview.py](clearpath/mapview.py)), every spot is coloured by its most urgent open report (needs review, ready to report, awaiting cleanup, cleared), with a toggleable layer of nearby help. The map only reads cached map data, so it never waits on OpenStreetMap; offline it says so and the lists still work.
+
 ## Nearby help and the response plan
 
 One OpenStreetMap (Overpass) query per ~1 km neighborhood cell, fetched when a spot is added and cached for 7 days, so reports never wait for it (a query can take 40 s). Each damage type maps to what it needs: fallen tree → tree service, hardware, builder; flooding → plumber/pumps, hardware, shelter; downed line → fire station, electrician (and 911 + the utility first). Hospitals and shelters are always included.

@@ -124,8 +124,9 @@ def report_status(report_id: str):
     near = (b.get("plan") or {}).get("nearby", {})
     for cat in PUBLIC_HELP:
         for p in near.get("by_category", {}).get(cat, [])[:1]:
-            help_.append({k: p[k] for k in ("category_label", "name", "distance_m", "phone", "address")})
-    return {"id": report_id, "location": b["location"]["name"], "status": ins["status"],
+            help_.append({k: p.get(k) for k in ("category_label", "name", "distance_m", "phone", "address", "lat", "lon")})
+    spot = {"lat": b["location"].get("lat"), "lon": b["location"].get("lon")}
+    return {"id": report_id, "location": b["location"]["name"], "spot": spot, "status": ins["status"],
             "status_label": RESIDENT_STATUS[ins["status"]], "processing": processing, "nearby_help": help_}
 
 

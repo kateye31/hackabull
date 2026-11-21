@@ -14,7 +14,9 @@ import streamlit as st
 
 import os
 
-from clearpath import capture, config, demo, geo, pipeline, vision
+import streamlit.components.v1 as components
+
+from clearpath import capture, config, demo, geo, mapview, pipeline, vision
 from clearpath.vision import aerial
 from clearpath.contracts import (HAZARD_TYPES, OBSTRUCTION_TYPES, PHASE_LABELS, SEVERITIES, STATUS_LABELS,
                                  ReviewedDetails)
@@ -204,10 +206,9 @@ def page_locations():
         n = demo.seed(store)
         st.success(f"Added {n} demo locations." if n else "Demo locations already exist.")
     locs = store.locations()
-    placed = [l for l in locs if l.get("lat") is not None]
-    if placed:
+    if any(l.get("lat") is not None for l in locs):
         st.subheader("Map")
-        st.map([{"lat": l["lat"], "lon": l["lon"]} for l in placed], size=25, zoom=14)
+        neighborhood_map(locs)
     if locs:
         cols = st.columns(3)
         for i, l in enumerate(locs):
@@ -329,6 +330,8 @@ def page_review():
     if not iid:
         st.header("Review queue")
         items = store.inspections()
+        if items:
+            neighborhood_map(height=380)
         if not items:
             st.info("No reports yet. Residents send them from the **Report damage** page "
                     "(share the link ending in `?page=report`).")
@@ -483,6 +486,12 @@ def page_review():
     if c3.button("Retake photo"):
         st.session_state[f"retake_{iid}"] = True
         st.rerun()
+
+
+def neighborhood_map(locs: list[dict] | None = None, height: int = 460):
+    """Leaflet: spots coloured by their most urgent report, nearby help, streets/satellite (clearpath/mapview.py)."""
+    data = mapview.map_data(locs if locs is not None else store.locations(), store.inspections())
+    components.html(mapview.leaflet_html(data, height), height=height + 8)
 
 
 def _open(iid: str):
