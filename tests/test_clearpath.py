@@ -382,5 +382,20 @@ class ResidentsAPI(unittest.TestCase):
         self.assertEqual(client.get("/api/reports/INS-9999").status_code, 404)
 
 
+class NeighborhoodMap(unittest.TestCase):
+    def test_pins_take_the_most_urgent_status_and_names_cannot_break_out(self):
+        from clearpath import mapview
+        locs = [{"id": 1, "name": "A</script><script>alert(1)</script>", "lat": 28.0, "lon": -82.4, "canopy": 0.4},
+                {"id": 2, "name": "B", "lat": 28.01, "lon": -82.41, "canopy": None},
+                {"id": 3, "name": "No coords", "lat": None, "lon": None}]
+        ins = [{"id": "INS-1", "location_id": 1, "status": "resolved"},
+               {"id": "INS-2", "location_id": 1, "status": "captured"}]
+        d = mapview.map_data(locs, ins)
+        self.assertEqual([x["color"] for x in d["spots"]], [mapview.COLOR["captured"], mapview.COLOR[None]])
+        self.assertIn("high", d["spots"][0]["canopy"])
+        html = mapview.leaflet_html(d)
+        self.assertNotIn("</script><script>alert", html)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -98,6 +98,12 @@ def fetch(lat: float, lon: float) -> list[dict] | None:
     return elements
 
 
+def cached(lat: float, lon: float) -> list[dict] | None:
+    """Cached elements only: never calls the network (for maps that must render instantly)."""
+    p = _cache_path(lat, lon)
+    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else None
+
+
 def _category(tags: dict) -> str | None:
     if tags.get("amenity") == "shelter" and tags.get("shelter_type") == "public_transport":
         return None
