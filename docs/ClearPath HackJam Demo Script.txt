@@ -1,0 +1,46 @@
+CLEARPATH · HACKJAM ’26
+Three-minute Home Turf pitch
+
+0:00–0:32 · Slide 1 · The hook
+
+Hurricane Milton caused an estimated 34.3 billion dollars in damage in the U.S., almost all of it in Florida. But that number can't tell a Tampa family whether the sidewalk to their bus stop is open. After the storm, the same branch that one person can step over can send a neighbor using a wheelchair into the street. We built ClearPath because recovery is also about getting down your own block.
+
+Presenter cue · Advance after “your own block.” Photograph: FEMA / Liz Roll, public domain. The flood photo illustrates Hurricane Milton’s impact and is separate from the demo pair.
+
+────────────────────────────────────────────────
+
+0:32–0:58 · Slide 2 · The idea
+
+Start with a dated overhead image of the exact neighborhood. A resident adds a photo from the ground that shows what is blocking the route now. The two views answer different questions. From above, we can see the layout. From the sidewalk, we can see the obstruction. ClearPath connects those two views to a single report a person can verify and later close after cleanup.
+
+Presenter cue · Point to the real Madeira Beach Esri and NOAA pair. Both images on the slide are overhead, and the NOAA survey is separate from the resident's ground upload.
+
+────────────────────────────────────────────────
+
+0:58–1:39 · Slide 3 · The technology
+
+We route the images based on their viewpoints. Gemini 3.5 Flash-Lite screens uploads and turns visible evidence into structured observations. For comparable views, OpenCV aligns the frames and DINOv2 compares patch embeddings. CLIP proposes a damage class, SegFormer masks the walkway, and RemoteCLIP compares changes in aerial scene scores. FastAPI and Streamlit share a SQLite inspection record. Leaflet maps the reports, and OpenStreetMap helps surface nearby resources. The satellite and ground photos are reviewed together without forcing a pixel comparison across perspectives.
+
+Presenter cue · If asked about alternatives, we prototyped OWL-ViT and dropped it from the active stack. The same-view methods are separate from the live mixed-view flow.
+
+────────────────────────────────────────────────
+
+1:39–1:57 · Slide 4 · What we verified
+
+In a repeatability check on one controlled aerial pair, Gemini found the inserted fallen tree all twelve times. It drew a usable box five times. That tells us where to rely on it. We show the source images and a written draft every time they're available, and the reviewer makes the call.
+
+Presenter cue · These are repeated calls on one controlled pair. Do not present them as accuracy on real storms.
+
+────────────────────────────────────────────────
+
+1:57–3:00 · Slide 5 · Live demo
+
+Here’s the resident site. I select the location and upload the ground photo. ClearPath screens the photo, then gives the resident a report number. Now I switch to the reviewer queue. Here’s the overhead reference beside the upload, plus Gemini’s draft. I can correct it, confirm the details, and open the printable report. The same inspection can take a follow-up photo after cleanup. For a Florida neighborhood, that means a photo can become a checked report and a visible record that a route reopened.
+
+Presenter cue · Before presenting, open the resident and reviewer tabs, confirm Gemini is active, and prepare an accepted upload plus a saved report. Optional: if time permits, show a meme rejection once. Use a verified same-location ground upload if available. Otherwise show the saved workflow test and say the demo images are from different locations. Use the Esri/NOAA pair separately as a real aerial comparison. If the network stalls, open the saved report and continue with the reviewer step.
+
+Sources
+NOAA · https://www.nhc.noaa.gov/data/tcr/AL142024_Milton.pdf
+FEMA photo · https://www.dvidshub.net/image/8695671/flooded-tampa-streets-after-hurricane-milton
+HackJam tracks · https://www.mlh.com/events/hackjam-26
+Project · https://github.com/kateye31/hackabull/tree/3-oclock-changes
