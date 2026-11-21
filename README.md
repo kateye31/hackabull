@@ -46,8 +46,8 @@ Checklists per person: [docs/PLAN.md](docs/PLAN.md). The hand-off types live in 
 
 ## How the comparison works
 
-1. **Align.** ORB keypoints and a homography line the new photo up with the reference. If that fails, an ECC alignment takes over, which handles small handheld shifts and lighting changes.
-2. **DINOv2.** Both photos become a 32 × 24 grid of patch features, and patches whose features moved far apart are flagged. The verdict uses the **largest connected changed region**: an object shows up as one solid region, while lighting and small misalignment leave scattered specks.
+1. **Align.** ORB keypoints and a homography line the new photo up with the reference. ECC is a fallback for small handheld shifts and lighting changes. The result records whether either method succeeded.
+2. **DINOv2.** Both photos become a 32 × 24 grid of patch features. The comparison reuses reference features for repeated captures and bases the verdict on the largest connected changed region after removing small specks.
 3. **OpenCV baseline.** A lighting-normalised pixel/colour difference runs on every photo, so the two can be compared side by side.
 4. **Verdict.** *Obstructed*, *clear*, or *uncertain*. Uncertain means "a person should look," and a person reviews every inspection anyway.
 
@@ -55,12 +55,24 @@ Checklists per person: [docs/PLAN.md](docs/PLAN.md). The hand-off types live in 
 
 `python -m evaluation.make_synthetic && python -m evaluation.evaluate data/eval/synthetic`
 
-| Method | Accuracy | Precision | Recall | Shadowed clear paths flagged | AUC |
-| --- | --- | --- | --- | --- | --- |
-| OpenCV baseline | 55% | 58% | 35% | 5 of 10 | 0.63 |
-| DINOv2 | 78% | 87% | 65% | 2 of 10 | 0.81 |
+| Method | Exact verdict matches | Obstruction recall | Clear paths flagged | Uncertain | AUC | CPU time per pair |
+| --- | --- | --- | --- | --- | --- | --- |
+| OpenCV baseline | 17 of 40 | 40% | 6 of 20 | 11 of 40 | 0.60 | 0.10 s |
+| DINOv2-small | 21 of 40 | 60% | 3 of 20 | 13 of 40 | 0.77 | 0.40 s |
 
-These are synthetic drawings, not photos, so the thresholds in [clearpath/vision/\_\_init\_\_.py](clearpath/vision/__init__.py) were set from them. **Re-tune them on real campus pairs** (same folder layout, `data/eval/real/<pair>/reference.jpg`, `capture.jpg`, plus `labels.csv`) and report those numbers instead.
+On this synthetic set, DINOv2 flagged 2 of 10 shadowed clear paths and OpenCV flagged 5. Exact matches require a definite verdict that matches the label. CPU timing includes alignment and comparison, after model load. This run used the default generator seed and [DINOv2-small revision `ed25f3a`](https://huggingface.co/facebook/dinov2-small/tree/ed25f3a31f01632728cabb09d1542f84ab7b0056).
+
+### Real campus evaluation
+
+Collect 15–30 reference/capture pairs at a few campus locations. Include clear, blocked, cleared follow-up, and shadowed clear captures. Take each reference with the path clear. Reuse that reference for the corresponding captures. Save each pair under `data/eval/real/<pair_id>/` as `reference.jpg` and `capture.jpg`.
+
+Create `data/eval/real/labels.csv` with columns `pair_id,label,hard_case`. Use `clear` or `obstructed` for `label` and enter `shadow` in `hard_case` for shadow trials. Keep photos in the ignored `data/` directory.
+
+```bash
+python -m evaluation.evaluate data/eval/real --per-pair --out data/eval/real/results.md
+```
+
+Use a development subset to tune the patch-distance and verdict thresholds. Hold back pairs from a different spot for the final score when possible. Report the held-out counts and label the synthetic results separately. Add `--methods opencv` for an OpenCV-only run when weights are unavailable.
 
 ## Verified reporting channel
 

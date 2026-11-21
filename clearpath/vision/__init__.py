@@ -36,6 +36,8 @@ def compare(reference_path, capture_path, overlay_path, method: str | None = Non
     app and the evaluation can show both side by side.
     """
     method = method or config.VISION_METHOD
+    if method not in ("auto", "dinov2", "opencv"):
+        raise ValueError(f"Unknown comparison method: {method}")
     ref = load_rgb(reference_path)
     cap = load_rgb(capture_path)
     cap_al, valid, align_info = align(ref, cap)
@@ -53,7 +55,9 @@ def compare(reference_path, capture_path, overlay_path, method: str | None = Non
 
     overlay_path = Path(overlay_path)
     overlay_path.parent.mkdir(parents=True, exist_ok=True)
-    cv2.imwrite(str(overlay_path), cv2.cvtColor(make_overlay(cap_al, primary["heat"], primary["mask"]), cv2.COLOR_RGB2BGR))
+    overlay = make_overlay(cap_al, primary["heat"], primary["mask"])
+    if not cv2.imwrite(str(overlay_path), cv2.cvtColor(overlay, cv2.COLOR_RGB2BGR)):
+        raise OSError(f"Could not write overlay to {overlay_path}")
 
     m = primary["method"]
     details = {
@@ -63,7 +67,9 @@ def compare(reference_path, capture_path, overlay_path, method: str | None = Non
                    "verdict": verdict("opencv", base["largest_region"])},
     }
     if m == "dinov2":
-        details["dinov2"] = {"changed_fraction": round(primary["changed_fraction"], 4),
+        details["dinov2"] = {"model_id": primary["model_id"],
+                             "patch_threshold": primary["patch_threshold"],
+                             "changed_fraction": round(primary["changed_fraction"], 4),
                              "largest_region": round(primary["largest_region"], 4),
                              "score": round(primary["score"], 4),
                              "mean_patch_distance": round(primary["mean_patch_distance"], 4),

@@ -105,7 +105,9 @@ def obstacle(img, rng, path, kind: str):
     elif kind == "sign":
         pts = np.array([[x, y - S(80)], [x - S(28), y], [x + S(28), y]], np.int32)
         cv2.fillPoly(img, [pts], (245, 215, 40))
-        cv2.putText(img, "!", (x - S(6), y - S(20)), cv2.FONT_HERSHEY_SIMPLEX, max(s, .5), (20, 20, 20), max(S(3), 1))
+        glyph = np.zeros(img.shape[:2], dtype=np.uint8)
+        cv2.putText(glyph, "!", (x - S(6), y - S(20)), cv2.FONT_HERSHEY_SIMPLEX, max(s, .5), 255, max(S(3), 1))
+        img[glyph != 0] = (20, 20, 20)
 
 
 def recapture(img, rng, hard: bool):

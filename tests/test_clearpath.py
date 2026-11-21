@@ -1,9 +1,11 @@
 """python -m unittest -v"""
 import os
 import shutil
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 _TMP = Path(tempfile.mkdtemp(prefix="clearpath-test-"))
 os.environ["CLEARPATH_DATA"] = str(_TMP)
@@ -59,6 +61,13 @@ class Vision(unittest.TestCase):
 
     def test_opencv_baseline(self):
         self._check("opencv")
+
+    def test_auto_falls_back_without_torch(self):
+        ref, cap, d = _pair(blocked=True)
+        with patch.dict(sys.modules, {"torch": None}):
+            result = vision.compare(ref, cap, d / "overlay.png", method="auto")
+        self.assertEqual(result.method, "opencv")
+        self.assertIn("fallback", result.details)
 
     def test_dinov2(self):
         if not vision.dino.available():
