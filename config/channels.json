@@ -1,9 +1,9 @@
 {
-  "_instructions": "Person 3: fill in the city's official channel for reporting blocked sidewalks (311 service request, public works / sidewalk repair, ADA coordinator, etc.). Copy the URL/email/phone from the city's own website, then set verified to true and record who checked it and when. The app will not show a channel as verified until you do.",
+  "_instructions": "Person 3: fill in the official channels for reporting storm damage in the neighborhood after a hurricane. Copy each URL/email/phone from that organization's own website (city or county storm-debris / 311 page, emergency management, the electric utility's downed-line page), then set verified to true and record source_page, who checked it and when. The app will not show a channel as verified until you do.",
   "channels": [
     {
-      "id": "city311",
-      "name": "City 311 service request",
+      "id": "storm_debris",
+      "name": "City/County storm debris and road clearing (311)",
       "url": "",
       "email": "",
       "phone": "",
@@ -13,8 +13,19 @@
       "verified_on": ""
     },
     {
-      "id": "ada",
-      "name": "City ADA coordinator",
+      "id": "emergency_mgmt",
+      "name": "County emergency management (non-emergency line)",
+      "url": "",
+      "email": "",
+      "phone": "",
+      "source_page": "",
+      "verified": false,
+      "verified_by": "",
+      "verified_on": ""
+    },
+    {
+      "id": "power_utility",
+      "name": "Electric utility: downed lines and outages (call 911 too)",
       "url": "",
       "email": "",
       "phone": "",

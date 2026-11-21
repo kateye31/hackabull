@@ -17,21 +17,22 @@ from pydantic import BaseModel, Field
 from .. import config
 from ..contracts import OBSTRUCTION_TYPES
 
-PROMPT = """You are helping a neighborhood sidewalk accessibility inspector.
+PROMPT = """You are helping a volunteer document hurricane damage in a residential neighborhood.
 
-Image 1 is a reference photo of a sidewalk when it was clear.
-Image 2 is a new photo of the same sidewalk.
+Image 1 is a photo of a street, sidewalk or walkway taken BEFORE the storm, when it was clear.
+Image 2 is a photo of the same spot taken AFTER the storm.
 {vision_hint}
 
-Compare them and describe what, if anything, now blocks or narrows the sidewalk.
+Compare them and describe what storm damage, if any, now blocks or narrows the route.
 Rules:
 - Describe only what is visible. If unsure, say so and lower your confidence.
-- Ignore differences in lighting, shadows, weather and camera angle.
-- Do not identify or describe people, faces or licence plates.
-- obstruction_type must be one of: {types}, or "None" if the path is clear.
-- observations: 2-5 short factual sentences a city public works crew can act on.
-- accessibility_impact: one sentence on how this affects someone using a wheelchair, cane or stroller.
-- suggested_action: one sentence on what the city should do.
+- Ignore differences in lighting, shadows, wet pavement, weather and camera angle.
+- Do not identify or describe people, faces, licence plates or house numbers.
+- If you see anything that could be a downed power line or wire, use "Downed power line" and say so in the first observation.
+- obstruction_type must be one of: {types}, or "None" if the route is clear.
+- observations: 2-5 short factual sentences a storm-debris or road crew can act on (what, where on the route, roughly how big).
+- accessibility_impact: one sentence on who can no longer get through: people on foot, wheelchair or stroller users, cars, emergency vehicles.
+- suggested_action: one sentence on what the cleanup crew or utility should do.
 """
 
 

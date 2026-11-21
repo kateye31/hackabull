@@ -1,4 +1,4 @@
-"""ClearPath: document a blocked neighborhood sidewalk, review it, report it, confirm the fix.
+"""ClearPath: after a hurricane, document storm damage blocking a neighborhood route, report it, confirm it was cleared.
 
     streamlit run app.py
 
@@ -12,7 +12,7 @@ from pathlib import Path
 import streamlit as st
 
 from clearpath import capture, config, demo, vision
-from clearpath.contracts import (OBSTRUCTION_TYPES, PHASE_LABELS, SEVERITIES, STATUS_LABELS,
+from clearpath.contracts import (HAZARD_TYPES, OBSTRUCTION_TYPES, PHASE_LABELS, SEVERITIES, STATUS_LABELS,
                                  ComparisonResult, ReviewedDetails)
 from clearpath.reporting import channels, gemini, report
 from clearpath.store import Store, now
@@ -52,7 +52,7 @@ def photo_input(key: str, reference_path: str | None = None, phase: str = "initi
     src = st.radio("Photo source", options, horizontal=True, key=f"{key}_src",
                    index=len(options) - 1 if demo_path else 0)
     if src == "Camera":
-        f = st.camera_input("Take a photo from where the reference was taken", key=f"{key}_cam")
+        f = st.camera_input("Take a photo from where the before-storm photo was taken", key=f"{key}_cam")
         return f.getvalue() if f else None
     if src == "Upload":
         f = st.file_uploader("Upload a photo", type=["jpg", "jpeg", "png", "webp"], key=f"{key}_up")
@@ -66,7 +66,7 @@ def process_capture(inspection_id: str, phase: str, image_bytes: bytes, referenc
     with st.status("Checking the photo…", expanded=True) as s:
         st.write("Saving photo")
         cap = store.add_capture(capture.save_capture(image_bytes, inspection_id, phase))
-        st.write("Comparing with the clear-path reference")
+        st.write("Comparing with the before-storm photo")
         overlay = config.OVERLAYS / inspection_id / f"{phase}_{cap.capture_id}.png"
         result: ComparisonResult = vision.compare(reference_path, cap.image_path, overlay)
         store.save_comparison(cap.capture_id, result)
@@ -81,7 +81,7 @@ def show_comparison(bundle: dict, phase: str):
     cap = bundle[phase]
     comp = cap["comparison"]
     c1, c2, c3 = st.columns(3)
-    c1.image(bundle["reference_path"], caption="Clear-path reference", width="stretch")
+    c1.image(bundle["reference_path"], caption="Before the storm", width="stretch")
     c2.image(cap["image_path"], caption=f"{PHASE_LABELS[phase]} photo", width="stretch")
     c3.image(comp["overlay_path"], caption="Changes highlighted", width="stretch")
     st.markdown(f"{VERDICT_STYLE[comp['verdict']]} &nbsp; about **{comp['changed_fraction']:.0%}** of the scene "
@@ -105,7 +105,7 @@ def show_observation(obs: dict | None):
         st.info(f"No AI observations: {obs.get('reason')}")
         return
     st.markdown(f"**AI observations** · {obs['model']} · confidence {obs['confidence']} · *draft for the reviewer*")
-    st.write(f"Obstruction: **{obs['obstruction_type']}**" + ("" if obs["path_blocked"] else " (Gemini thinks the path is clear)"))
+    st.write(f"Damage: **{obs['obstruction_type']}**" + ("" if obs["path_blocked"] else " (Gemini thinks the route is clear)"))
     for o in obs["observations"]:
         st.write(f"- {o}")
     if obs.get("accessibility_impact"):
@@ -117,21 +117,23 @@ def show_observation(obs: dict | None):
 # ---------------------------------------------------------------- pages
 def page_locations():
     st.header("Locations")
-    st.write("Each location needs one photo of the sidewalk when it's **clear**. Every inspection there is compared "
-             "against it, so take it from a spot you can find again (e.g. standing at a curb ramp, a hydrant or a street sign).")
+    st.write("Each location is a neighborhood route people need after a storm: the sidewalk to the bus stop, a curb ramp, "
+             "the walkway to the shelter. It needs one photo taken **before the storm**, while it's clear. Every "
+             "after-storm photo there is compared against it, so take it from a spot you can find again (a hydrant, "
+             "a street sign, a mailbox).")
     with st.form("new_loc", clear_on_submit=True):
-        name = st.text_input("Location name", placeholder="e.g. Oak St & 3rd, northeast corner")
-        desc = st.text_input("Where exactly / how to stand", placeholder="Toes on the curb ramp, facing north up Oak St")
-        src = st.radio("Reference photo", ["Camera", "Upload"], horizontal=True)
-        f = st.camera_input("Clear-path photo") if src == "Camera" else st.file_uploader("Clear-path photo", type=["jpg", "jpeg", "png", "webp"])
+        name = st.text_input("Location name", placeholder="e.g. Palm St sidewalk to the bus stop")
+        desc = st.text_input("Where exactly / how to stand", placeholder="Next to the hydrant, facing the bus shelter")
+        src = st.radio("Before-storm photo", ["Camera", "Upload"], horizontal=True)
+        f = st.camera_input("Before-storm photo") if src == "Camera" else st.file_uploader("Before-storm photo", type=["jpg", "jpeg", "png", "webp"])
         if st.form_submit_button("Add location", type="primary"):
             if not name.strip() or not f:
-                st.error("Add a name and a reference photo.")
+                st.error("Add a name and a before-storm photo.")
             else:
                 ref = capture.save_reference(f.getvalue(), name)
                 store.add_location(name, ref, desc)
                 st.success(f"Added {name}.")
-    if st.button("Add 3 demo locations (no camera needed)"):
+    if st.button("Add demo locations (no camera needed)"):
         n = demo.seed(store)
         st.success(f"Added {n} demo locations." if n else "Demo locations already exist.")
     locs = store.locations()
@@ -146,7 +148,7 @@ def page_locations():
 def page_inspect():
     locs = store.locations()
     if not locs:
-        st.info("Add a location with a clear-path reference photo first (Locations page).")
+        st.info("Add a location with a before-storm photo first (Locations page).")
         return
 
     qp = st.query_params.get("inspection")
@@ -162,7 +164,7 @@ def page_inspect():
         names = {l["name"]: l["id"] for l in locs}
         name = st.selectbox("Where are you?", list(names))
         loc = next(l for l in locs if l["id"] == names[name])
-        st.image(loc["reference_path"], caption="Clear-path reference: stand roughly here", width=420)
+        st.image(loc["reference_path"], caption="Before the storm: stand roughly here", width=420)
         if st.button("Start inspection", type="primary"):
             st.session_state.iid = store.new_inspection(names[name])
             st.rerun()
@@ -178,7 +180,7 @@ def page_inspect():
         st.rerun()
 
     # 1. initial capture
-    st.subheader("1. Photo of the problem")
+    st.subheader("1. After-storm photo")
     if not b["initial"]:
         img = photo_input(f"{iid}_initial", b["reference_path"], "initial")
         if img and st.button("Check this photo", type="primary"):
@@ -191,23 +193,26 @@ def page_inspect():
     # 2. human review
     st.subheader("2. Review")
     if ins["status"] == "dismissed":
-        st.write("Dismissed: not an obstruction.")
+        st.write("Dismissed: no storm damage blocking the route.")
         return
     obs = b["initial"].get("observation") or {}
     prev = b["review"] or {}
+    if obs.get("obstruction_type") in HAZARD_TYPES or prev.get("obstruction_type") in HAZARD_TYPES:
+        st.error("**Downed power line: treat it as live.** Stay at least 35 feet (10 m) away, keep others back, and call "
+                 "**911** and the power company now. Don't wait for this report.")
     default_type = prev.get("obstruction_type") or (obs.get("obstruction_type") if obs.get("obstruction_type") in OBSTRUCTION_TYPES else OBSTRUCTION_TYPES[0])
     default_desc = prev.get("description") or " ".join(obs.get("observations", []))
     with st.form(f"review_{iid}"):
-        t = st.selectbox("What is blocking the path?", OBSTRUCTION_TYPES, index=OBSTRUCTION_TYPES.index(default_type))
+        t = st.selectbox("What is blocking the route?", OBSTRUCTION_TYPES, index=OBSTRUCTION_TYPES.index(default_type))
         sev = st.radio("How bad is it?", SEVERITIES, index=SEVERITIES.index(prev["severity"]) if prev.get("severity") in SEVERITIES else 0)
-        desc = st.text_area("Description for the city", value=default_desc, height=110,
+        desc = st.text_area("Description for the cleanup crew", value=default_desc, height=110,
                             help="Pre-filled from the AI observations when available. Edit so it's accurate.")
-        note = st.text_input("Exact spot", value=prev.get("location_note", ""), placeholder="e.g. in front of 412 Oak St, by the bus shelter")
+        note = st.text_input("Exact spot", value=prev.get("location_note", ""), placeholder="e.g. across the sidewalk outside the bus shelter")
         who = st.text_input("Your name", value=prev.get("reviewer", ""))
         ok = st.checkbox("I looked at the photos and these details are accurate.", value=bool(prev.get("confirmed")))
         c1, c2 = st.columns(2)
         confirm = c1.form_submit_button("Confirm details", type="primary")
-        dismiss = c2.form_submit_button("Not an obstruction")
+        dismiss = c2.form_submit_button("No storm damage here")
     if confirm:
         if not (ok and who.strip() and desc.strip()):
             st.error("Fill in the description and your name, and tick the confirmation box.")
@@ -218,7 +223,7 @@ def page_inspect():
             st.session_state.pop(f"report_text_{iid}", None)
             st.rerun()
     if dismiss:
-        store.set_status(iid, "dismissed", "reviewer: not an obstruction")
+        store.set_status(iid, "dismissed", "reviewer: no storm damage blocking the route")
         st.rerun()
     if not (b["review"] and b["review"].get("confirmed")):
         return
@@ -232,8 +237,8 @@ def page_inspect():
         channel = vch[names.index(st.selectbox("Send to", names))]
         st.caption(f"Verified by {channel['verified_by']} on {channel['verified_on']} · {channels.contact_line(channel)}")
     else:
-        st.warning("No verified city reporting channel yet. Person 3: fill in config/channels.json from the "
-                   "city's official website (311 / public works) and mark it verified.")
+        st.warning("No verified reporting channel yet. Person 3: fill in config/channels.json from the official "
+                   "city/county storm-debris and power company websites and mark them verified.")
     key = f"report_text_{iid}"
     if key not in st.session_state:
         st.session_state[key] = (b["report"] or {}).get("text") or report.draft_text(b, channel)
@@ -256,27 +261,27 @@ def page_inspect():
         return
 
     # 4. follow-up
-    st.subheader("4. Follow-up")
-    st.write("Come back later and take a photo from the same spot. It's compared with the **same** clear-path reference.")
+    st.subheader("4. After cleanup")
+    st.write("Come back after the crew has been and take a photo from the same spot. It's compared with the **same** before-storm photo.")
     if not b["follow_up"] or st.session_state.get(f"retake_{iid}"):
         img = photo_input(f"{iid}_follow", b["reference_path"], "follow_up")
-        if img and st.button("Check follow-up photo", type="primary"):
+        if img and st.button("Check after-cleanup photo", type="primary"):
             process_capture(iid, "follow_up", img, b["reference_path"])
             st.session_state.pop(f"retake_{iid}", None)
             st.rerun()
         return
     show_comparison(b, "follow_up")
     if ins["status"] in ("resolved",):
-        st.success("Resolved.")
+        st.success("Cleared.")
         return
     c1, c2, c3 = st.columns(3)
-    if c1.button("Confirm resolved", type="primary"):
-        store.set_status(iid, "resolved", "follow-up confirmed clear")
+    if c1.button("Confirm cleared", type="primary"):
+        store.set_status(iid, "resolved", "follow-up confirmed the route is clear")
         st.rerun()
     if c2.button("Still blocked"):
         store.set_status(iid, "still_blocked", "follow-up: obstruction still there")
         st.rerun()
-    if c3.button("Retake follow-up"):
+    if c3.button("Retake photo"):
         st.session_state[f"retake_{iid}"] = True
         st.rerun()
 
@@ -304,7 +309,7 @@ def _open(iid: str):
 # ---------------------------------------------------------------- layout
 with st.sidebar:
     st.title("ClearPath")
-    st.caption("Report blocked neighborhood sidewalks and confirm they get fixed.")
+    st.caption("After a hurricane: report storm damage blocking neighborhood streets, sidewalks and walkways, and confirm it gets cleared.")
     page = st.radio("Page", ["Inspect", "Locations", "All inspections"], key="page", label_visibility="collapsed")
     st.divider()
     method = vision_ready()

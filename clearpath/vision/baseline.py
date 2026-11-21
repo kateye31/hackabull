@@ -46,7 +46,7 @@ def changed_mask(strength: np.ndarray) -> np.ndarray:
 
 def compare(reference: np.ndarray, capture_aligned: np.ndarray, valid: np.ndarray) -> dict:
     strength = diff_map(reference, capture_aligned, valid)
-    mask = changed_mask(strength)
+    mask = changed_mask(strength) & valid
     frac = float(mask[valid].mean()) if valid.any() else 0.0
     n, _, stats, _ = cv2.connectedComponentsWithStats(mask.astype(np.uint8), connectivity=8)
     largest = float(stats[1:, cv2.CC_STAT_AREA].max() / max(valid.sum(), 1)) if n > 1 else 0.0

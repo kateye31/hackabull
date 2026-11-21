@@ -158,7 +158,7 @@ def check_locations():
         real += bool(has) and not synthetic
         line(OK, f"location '{l['name']}'", "backup demo photos: " + (", ".join(has) if has else "none (camera/upload only)"))
     if not real:
-        line(WARN, "real-photo backup run", 'no real neighborhood location with demo photos yet; '
+        line(WARN, "real-photo backup run", 'no real before/after-storm location with demo photos yet; '
              'python -m clearpath.demo real "<name>" <folder>')
 
 

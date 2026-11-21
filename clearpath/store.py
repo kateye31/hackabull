@@ -1,6 +1,6 @@
 """SQLite storage (Person 2).
 
-locations    a spot in the neighborhood and its clear-path reference photo
+locations    a neighborhood spot and its before-storm reference photo
 inspections  one problem at one location. Copies the reference path at creation,
              so the initial and follow-up captures are always compared against the
              SAME clear-path reference, even if the location's photo is replaced later.
@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import closing, contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -58,11 +59,12 @@ class Store:
         with self._c() as c:
             c.executescript(SCHEMA)
 
+    @contextmanager
     def _c(self):
-        c = sqlite3.connect(self.path)
-        c.row_factory = sqlite3.Row
-        c.execute("PRAGMA foreign_keys = ON")
-        return c
+        with closing(sqlite3.connect(self.path)) as c, c:
+            c.row_factory = sqlite3.Row
+            c.execute("PRAGMA foreign_keys = ON")
+            yield c
 
     # ---------- locations ----------
     def add_location(self, name: str, reference_path: Path, description: str = "") -> int:
@@ -82,10 +84,11 @@ class Store:
 
     # ---------- inspections ----------
     def new_inspection(self, location_id: int) -> str:
-        loc = self.location(location_id)
-        if not loc:
-            raise KeyError(f"no location {location_id}")
         with self._c() as c:
+            c.execute("BEGIN IMMEDIATE")
+            loc = c.execute("SELECT reference_path FROM locations WHERE id=?", (location_id,)).fetchone()
+            if not loc:
+                raise KeyError(f"no location {location_id}")
             n = c.execute("SELECT COUNT(*) FROM inspections").fetchone()[0]
             iid = f"INS-{n + 1:04d}"
             t = now()

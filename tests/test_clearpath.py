@@ -2,9 +2,11 @@
 import importlib
 import os
 import shutil
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 _TMP = Path(tempfile.mkdtemp(prefix="clearpath-test-"))
 os.environ["CLEARPATH_DATA"] = str(_TMP)
@@ -67,6 +69,13 @@ class Vision(unittest.TestCase):
     def test_opencv_baseline(self):
         self._check("opencv")
 
+    def test_auto_falls_back_without_torch(self):
+        ref, cap, d = _pair(blocked=True)
+        with patch.dict(sys.modules, {"torch": None}):
+            result = vision.compare(ref, cap, d / "overlay.png", method="auto")
+        self.assertEqual(result.method, "opencv")
+        self.assertIn("fallback", result.details)
+
     def test_dinov2(self):
         if not vision.dino.available():
             self.skipTest("DINOv2 not available offline")
@@ -96,7 +105,7 @@ class Reporting(unittest.TestCase):
         iid = s.new_inspection(s.add_location("Ramp", ref))
         c = s.add_capture(SavedCapture(iid, "initial", cap, now()))
         s.save_comparison(c.capture_id, vision.compare(ref, cap, d / "o.png", method="opencv"))
-        s.save_review(iid, ReviewedDetails("Trash or debris", "Minor: narrows the path", desc, "", "Sam", confirmed, now()))
+        s.save_review(iid, ReviewedDetails("Storm debris pile", "Minor: narrows the route", desc, "", "Sam", confirmed, now()))
         return s.bundle(iid)
 
     def test_needs_confirmed_review(self):
@@ -133,7 +142,7 @@ class RealDemoPhotos(unittest.TestCase):
         eval_root = _TMP / "eval-real"
         demo.EVAL_REAL, old = eval_root, demo.EVAL_REAL
         try:
-            loc_id = demo.add_real("Oak St & 3rd / NE", shoot, "Curb ramp, facing north", s, to_eval=True)
+            loc_id = demo.add_real("Palm St & 3rd / NE", shoot, "Curb ramp, facing north", s, to_eval=True)
         finally:
             demo.EVAL_REAL = old
         loc = s.location(loc_id)
@@ -141,11 +150,11 @@ class RealDemoPhotos(unittest.TestCase):
         self.assertTrue(demo.demo_photo(loc["reference_path"], "initial"))
         self.assertTrue(demo.demo_photo(loc["reference_path"], "follow_up"))
         labels = (eval_root / "labels.csv").read_text().splitlines()
-        self.assertIn("oak-st---3rd---ne-blocked,obstructed,,", labels)
-        self.assertIn("oak-st---3rd---ne-cleared,clear,,", labels)
-        self.assertTrue((eval_root / "oak-st---3rd---ne-blocked" / "capture.jpg").exists())
+        self.assertIn("palm-st---3rd---ne-blocked,obstructed,,", labels)
+        self.assertIn("palm-st---3rd---ne-cleared,clear,,", labels)
+        self.assertTrue((eval_root / "palm-st---3rd---ne-blocked" / "capture.jpg").exists())
         with self.assertRaises(ValueError):
-            demo.add_real("Oak St & 3rd / NE", shoot, store=s)
+            demo.add_real("Palm St & 3rd / NE", shoot, store=s)
 
     def test_missing_blocked_photo(self):
 
@@ -166,15 +175,15 @@ class AppFlow(unittest.TestCase):
         next(b for b in at.button if b.label == "Start inspection").click().run()
         next(b for b in at.button if b.label == "Check this photo").click().run()
         self.assertFalse(at.exception)
-        at.text_area[0].set_value("Scooter lying across the sidewalk.")
+        at.text_area[0].set_value("Fallen tree across the sidewalk.")
         next(t for t in at.text_input if t.label == "Your name").set_value("Tester")
         at.checkbox[0].check()
         next(b for b in at.button if b.label == "Confirm details").click().run()
         next(b for b in at.button if b.label.startswith("Mark as sent")).click().run()
-        next(b for b in at.button if b.label == "Check follow-up photo").click().run()
-        next(b for b in at.button if b.label == "Confirm resolved").click().run()
+        next(b for b in at.button if b.label == "Check after-cleanup photo").click().run()
+        next(b for b in at.button if b.label == "Confirm cleared").click().run()
         self.assertFalse(at.exception)
-        self.assertIn("Resolved.", [s.value for s in at.success])
+        self.assertIn("Cleared.", [s.value for s in at.success])
 
 
 if __name__ == "__main__":

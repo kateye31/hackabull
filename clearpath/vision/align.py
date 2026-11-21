@@ -33,9 +33,6 @@ def align(reference: np.ndarray, capture: np.ndarray, min_inliers: int = 30):
         capture = cv2.resize(capture, (w, h), interpolation=cv2.INTER_AREA)
     g0 = cv2.cvtColor(reference, cv2.COLOR_RGB2GRAY)
     g1 = cv2.cvtColor(capture, cv2.COLOR_RGB2GRAY)
-    orb = cv2.ORB_create(3000)
-    k0, d0 = orb.detectAndCompute(g0, None)
-    k1, d1 = orb.detectAndCompute(g1, None)
     H, info = _orb_homography(g0, g1, w, h, min_inliers)
     if H is None:
         H, ecc_info = _ecc_affine(g0, g1)
@@ -72,6 +69,9 @@ def _orb_homography(g0, g1, w, h, min_inliers):
 def _ecc_affine(g0, g1, min_corr: float = 0.6):
     """Intensity-based fallback for small handheld shifts/rotations. Robust to brightness changes."""
     s = 0.5
+    h, w = g0.shape
+    if min(h, w) < 2:
+        return None, {"reason": "image too small for ECC"}
     a = cv2.GaussianBlur(cv2.resize(g0, None, fx=s, fy=s), (5, 5), 0).astype(np.float32)
     b = cv2.GaussianBlur(cv2.resize(g1, None, fx=s, fy=s), (5, 5), 0).astype(np.float32)
     warp = np.eye(2, 3, dtype=np.float32)
@@ -80,11 +80,16 @@ def _ecc_affine(g0, g1, min_corr: float = 0.6):
                                           (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 200, 1e-5), None, 5)
     except cv2.error:
         return None, {"ecc": "did not converge"}
-    if corr < min_corr:
+    if not np.isfinite(corr) or corr < min_corr:
         return None, {"ecc_corr": round(float(corr), 3), "reason": "ECC correlation too low"}
     warp[:, 2] /= s
     # ECC maps reference -> capture coordinates; invert to warp the capture onto the reference
-    H = np.linalg.inv(np.vstack([warp, [0, 0, 1]]))
+    try:
+        H = np.linalg.inv(np.vstack([warp, [0, 0, 1]]))
+    except np.linalg.LinAlgError:
+        return None, {"reason": "singular ECC transform"}
+    if not _sane(H, w, h):
+        return None, {"reason": "no reliable ECC transform"}
     return H, {"method": "ecc", "ecc_corr": round(float(corr), 3)}
 
 
@@ -92,5 +97,5 @@ def _sane(H, w, h) -> bool:
     """Reject wild homographies (flips, huge zooms) that RANSAC sometimes returns."""
     corners = np.float32([[0, 0], [w, 0], [w, h], [0, h]]).reshape(-1, 1, 2)
     out = cv2.perspectiveTransform(corners, H).reshape(-1, 2)
-    area = cv2.contourArea(out)
-    return 0.5 * w * h < area < 2.0 * w * h and cv2.isContourConvex(out.astype(np.float32))
+    area = cv2.contourArea(out, oriented=True)
+    return 0.5 * w * h < area < 2.0 * w * h and cv2.isContourConvex(out)

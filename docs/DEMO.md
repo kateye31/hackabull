@@ -1,36 +1,39 @@
 # Demo playbook (Person 1)
 
-Three jobs: take real photos, check the laptop in the room, rehearse. Each section ends with the command that proves it's done.
+The story: **after a hurricane, a neighborhood needs to know which streets, sidewalks and walkways are passable, and the city needs to know what to clear first.** ClearPath compares a before-storm photo of each route with an after-storm photo, a person confirms the damage, the report goes to the right office, and an after-cleanup photo closes it.
 
-## 1. Photo shoot in the neighborhood (about 30 minutes)
+Three jobs: take real photos, check the laptop in the room, rehearse. Each section ends with how you know it's done.
 
-Pick 2–3 sidewalk spots near the venue: a curb ramp, a bus stop, a stretch of sidewalk in front of a row of houses. For each one, make a folder named after the spot, e.g. `photos/oak-3rd/`, and take three photos **from the same spot, same zoom, landscape**:
+## 1. Photo shoot in the neighborhood (about 45 minutes)
+
+You can't schedule a hurricane, so **stage the storm damage**. Pick 2–3 routes near the venue that people would need after a storm: the sidewalk to a bus stop, a curb ramp, the walkway to a community building. For each one, make a folder, e.g. `photos/palm-bus/`, and take three photos **from the same spot, same zoom, landscape**:
 
 | File | What | Notes |
 | --- | --- | --- |
-| `reference.jpg` | The sidewalk when it's **clear** | Required. |
-| `blocked.jpg` | Same spot with something in the way | Required. Use your own stuff: a backpack, a bike, a chair, a recycling bin. Put it **in the middle of the sidewalk**, never in the street, and make it cover a decent chunk of the frame. |
-| `cleared.jpg` | Same spot, clear again, a few minutes later | Optional, but you need it for the follow-up step in the backup run. |
+| `reference.jpg` | **Before the storm**: the route clear | Required. |
+| `blocked.jpg` | **After the storm**: same spot with storm debris | Required. Use what a storm actually leaves: fallen palm fronds, branches, a pile of yard waste, a board or tarp, a tipped-over trash bin. Spread it **across the sidewalk** (never in the street) so it covers a good chunk of the frame. |
+| `cleared.jpg` | **After cleanup**: same spot, debris gone | Optional, but you need it for the last step in the backup run. |
 
 How to stand in the same spot every time:
 
-- Pick a fixed mark: a curb ramp, a hydrant, a street sign, a driveway edge. Write down "toes on the curb ramp at Oak & 3rd, facing north." You'll pass this as `--where`.
-- Hold the phone at chest height. Frame the sidewalk so it runs up the middle of the picture.
-- No people's faces, licence plates or house numbers. Wait for people and cars to pass, and stay on public sidewalk (don't photograph into yards or windows).
+- Pick a fixed mark: a hydrant, a street sign, a mailbox, a driveway edge. Write down "next to the hydrant, facing the bus shelter." You'll pass this as `--where`.
+- Hold the phone at chest height. Frame the route so it runs up the middle of the picture.
+- No people's faces, licence plates or house numbers. Wait for people and cars to pass, and stay on public sidewalk.
+- Clean up every bit of staged debris when you're done.
 - iPhone: set **Settings → Camera → Formats → Most Compatible** first, or the photos come out as HEIC and the import refuses them.
 
-Take a few extra blocked/clear shots at each spot (different object, shadow, a step to the left). They're free evaluation data for Person 2.
+Extras are free evaluation data for Person 2: a different kind of debris, a clear shot with a long shadow, and a clear shot of **wet pavement** (after rain, or hose a patch down). Wet ground after a storm is the false alarm we most need to test.
 
 Then, on the laptop:
 
 ```bash
-python -m clearpath.demo real "Oak St & 3rd" photos/oak-3rd --where "Toes on the curb ramp, facing north" --eval
+python -m clearpath.demo real "Palm St bus stop" photos/palm-bus --where "Next to the hydrant, facing the shelter" --eval
 python -m clearpath.demo list
 ```
 
 `--eval` also copies each set into `data/eval/real/` as labeled pairs (`blocked` → obstructed, `cleared` → clear), in the layout Person 2's `evaluation/evaluate.py` reads. Tell Person 2 when they're there.
 
-**Done when:** `demo list` shows your real locations with `demo photos: initial, follow_up`, and in the app each one gets a red **Obstructed** on the blocked photo and green **Clear** on the cleared one. If a real spot comes back *Uncertain*, retake `blocked.jpg` with the object bigger in the frame, or tell Person 2 (it's the threshold re-tune they're doing).
+**Done when:** `demo list` shows your real locations with `demo photos: initial, follow_up`, and in the app each one gets a red **Obstructed** after the storm and a green **Clear** after cleanup. If a spot comes back *Uncertain*, retake `blocked.jpg` with more debris in the frame, or tell Person 2 (it's the threshold re-tune they're doing).
 
 ## 2. Laptop check, in the presenting room
 
@@ -47,31 +50,31 @@ Then in the browser:
 
 - Open **http://localhost:8501**. Don't use the "Network URL": browsers block the camera on plain-http addresses other than localhost.
 - Allow camera access when asked. If you said no once, click the camera icon in the address bar to reset it.
-- The laptop webcam faces *you*, not a sidewalk. For the live part, use the **tabletop sidewalk**: point the webcam (or a USB webcam) at a clear patch of table or floor, add it on **Locations** as "Demo table" with the Camera option, then put a water bottle or bag in the middle. Check the lighting: the room's projector lights can make frames very dark or blown out.
-- Run one full inspection with the camera: capture → Obstructed → review → mark as sent → remove the object → follow-up → Confirm resolved.
+- The laptop webcam faces *you*, not a street. For the live part, build a **tabletop street**: point the webcam (or a USB webcam) at a clear patch of table, add it on **Locations** as "Demo table" with the Camera option (that's the before-storm photo), then drop a handful of twigs and leaves or a crumpled bag across it (the storm). Check the lighting: projector lights can make frames very dark or blown out.
+- Run one full inspection with the camera: after-storm photo → Obstructed → review → mark as sent → clear the table → after-cleanup photo → **Confirm cleared**.
 
 **Done when:** the preflight passes in the room and you've done one full camera inspection there.
 
 ## 3. Demo script (about 3 minutes)
 
-Have the app open on **Inspect**, sidebar visible. Two inspections already finished (one *Resolved*, one *Still blocked*) make **All inspections** look real.
+Have the app open on **Inspect**, sidebar visible. Finish two inspections beforehand (one *Cleared*, one *Still blocked*) so **All inspections** looks like a real neighborhood after a storm.
 
 | Time | Do | Say |
 | --- | --- | --- |
-| 0:00 | Locations page, point at a real reference photo | "Every sidewalk spot gets one photo of what clear looks like. That's what we compare against." |
-| 0:20 | Inspect → real location (or Demo table) → Start → capture/Demo photo → **Check this photo** | "A neighbor sees a scooter dumped across the curb ramp and takes a photo from the same spot." |
-| 0:40 | Point at the three images and the red outline | "DINOv2 compares the two photos patch by patch and outlines what's new. Lighting changes don't trip it; a bike does." Open **Comparison details**: "The pixel-diff baseline runs too, and here it misses it." (Oak Street sidewalk shows this: DINOv2 *obstructed*, OpenCV *clear*.) |
-| 1:10 | AI observations (if Gemini is on) | "Gemini drafts a description. It's labeled as a draft, and nothing goes out until a person confirms it." |
-| 1:30 | Fill the review form, tick the box, **Confirm details** | "The reviewer picks the type and severity and signs off." |
-| 1:50 | Report: show the editable text, **Download printable report**, **Mark as sent** | "It goes to the city's verified reporting channel, 311 or public works, with the photos attached." |
-| 2:20 | Follow-up: cleared photo → **Confirm resolved** | "Later, same spot, same reference. It's clear, so we close it. If it weren't, it goes back as still blocked." |
-| 2:40 | **All inspections** | "Every sidewalk spot, its status, and its history." |
+| 0:00 | Locations page, point at a before-storm photo | "Before hurricane season, a neighborhood photographs the routes people depend on: the sidewalk to the bus stop, the curb ramps, the walkway to the community center." |
+| 0:20 | Inspect → a real location (or Demo table) → Start → camera/Demo photo → **Check this photo** | "The storm passes. A neighbor goes back to the same spot and takes one photo." |
+| 0:40 | Point at before / after / highlighted | "DINOv2 compares the two photos patch by patch and outlines what's new. Shadows and lighting changes mostly don't trip it; a debris pile does." Open **Comparison details**: "A pixel-diff baseline runs too, and here it misses it." (Bayview Avenue curb ramp shows this: DINOv2 *obstructed*, OpenCV *clear*.) |
+| 1:10 | AI observations (if Gemini is on) | "Gemini drafts what it sees and who can't get through: wheelchair users, strollers, cars. It's labeled a draft. And if it sees a downed line, the app tells you to stay away and call 911 first." |
+| 1:30 | Fill the review form, tick the box, **Confirm details** | "A person picks the damage type and how bad it is, and signs off. Nothing goes out unconfirmed." |
+| 1:50 | Report: editable text, **Download printable report**, **Mark as sent** | "It goes to the verified storm-debris line with the photos attached, so the crew knows exactly what to bring." |
+| 2:20 | After cleanup: cleared photo → **Confirm cleared** | "After the crew comes, same spot, same before-storm photo. It's clear, so the route is open again. If not, it goes back as still blocked." |
+| 2:40 | **All inspections** | "Every route in the neighborhood and whether it's passable: a recovery map built one photo at a time." |
 
-Use these demo locations:
+Demo locations:
 
-- **Your real neighborhood locations** first. They're the strongest evidence.
-- **Oak Street sidewalk** (synthetic): best for showing DINOv2 beating the baseline.
-- **Maple Avenue curb ramp** and **5th Avenue bus stop** (synthetic): both come out *Obstructed*, then *Clear* on follow-up.
+- **Your real staged locations** first. They're the strongest evidence.
+- **Bayview Avenue curb ramp** (synthetic debris pile): best for showing DINOv2 beating the baseline.
+- **Palm Street sidewalk** (fallen tree), **Walkway to the community center** (branches), **5th Avenue bus stop** (flooding): all come out *Obstructed*, then *Clear* after cleanup. Use one to show it's not just flooding.
 
 ## 4. Backup plan
 
@@ -80,7 +83,7 @@ If anything goes wrong live, switch the photo source to **Demo photo** on a real
 | Problem | Fix on stage |
 | --- | --- |
 | Camera black or "in use" | Close Teams/Zoom, or switch to **Demo photo** |
-| Gemini slow or fails | It falls back to "No AI observations"; fill the form by hand and say "we never depend on the AI" |
+| Gemini slow or fails | It falls back to "No AI observations"; fill the form by hand and say "we never depend on the AI" (fitting: after a storm the network is often down) |
 | Wi-Fi down | DINOv2 is cached (preflight checked), so only Gemini is affected |
 | App crashes | `Ctrl+C`, `streamlit run app.py` again; inspections are saved in SQLite, so reopen from **All inspections** |
 

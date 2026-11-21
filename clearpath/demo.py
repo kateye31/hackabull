@@ -1,17 +1,18 @@
 """Demo locations so the app works with no webcam (Person 1).
 
-    python -m clearpath.demo                    # three synthetic sidewalks
-    python -m clearpath.demo real "Oak St & 3rd" photos/oak-3rd --where "Toes on the curb ramp, facing north"
-    python -m clearpath.demo real "Oak St & 3rd" photos/oak-3rd --eval   # also give Person 2 the pairs
+    python -m clearpath.demo                    # four synthetic routes after a storm
+    python -m clearpath.demo real "Palm St bus stop" photos/palm-bus --where "Next to the hydrant, facing the shelter"
+    python -m clearpath.demo real "Palm St bus stop" photos/palm-bus --eval   # also give Person 2 the pairs
     python -m clearpath.demo list
 
-Synthetic: creates three sidewalks under data/demo/<slug>/ with reference.jpg (clear),
-initial.jpg (blocked), followup.jpg (clear again, different light/angle).
+Synthetic: creates four neighborhood routes under data/demo/<slug>/ with reference.jpg
+(before the storm), initial.jpg (storm damage: fallen tree, debris, branches, flooding),
+followup.jpg (after cleanup, different light/angle).
 
 Real: takes a folder of your own neighborhood photos named
-    reference.*   the sidewalk when it's clear          (required)
-    blocked.*     the same spot with something in the way (required)
-    cleared.*     the same spot clear again, later      (optional)
+    reference.*   the route before the storm, clear     (required)
+    blocked.*     the same spot with storm debris        (required)
+    cleared.*     the same spot after cleanup           (optional)
 (.jpg/.jpeg/.png/.webp), re-encodes them (rotation fixed, EXIF/GPS removed) into
 data/demo/<slug>/ and registers the location. Either way the app offers "Demo photo"
 for these locations, which is the backup run if the camera fails on stage.
@@ -34,10 +35,11 @@ from .store import Store
 DEMO = config.DATA / "demo"
 EVAL_REAL = config.DATA / "eval" / "real"
 SPOTS = [
-    # seeds picked so DINOv2 says obstructed on the blocked photo and clear on the follow-up
-    ("Oak Street sidewalk", "scooter", 23),        # OpenCV baseline misses this one: good for the pitch
-    ("Maple Avenue curb ramp", "barrier", 19),
-    ("5th Avenue bus stop", "scooter", 21),
+    # seeds picked so DINOv2 says obstructed after the storm and clear after cleanup
+    ("Palm Street sidewalk", "tree", 3),
+    ("Bayview Avenue curb ramp", "debris", 5),             # OpenCV baseline misses this one: good for the pitch
+    ("Walkway to the community center", "branches", 3),
+    ("5th Avenue bus stop", "water", 6),
 ]
 IMAGE_EXT = (".jpg", ".jpeg", ".png", ".webp")
 # output file in data/demo/<slug>/  ->  accepted input names (without extension)
@@ -76,7 +78,7 @@ def seed(store: Store | None = None) -> int:
         for fname, img in (("reference.jpg", ref), ("initial.jpg", recapture(blocked, rng, hard=False)),
                            ("followup.jpg", recapture(base, rng, hard=False))):
             cv2.imwrite(str(d / fname), cv2.cvtColor(img, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 90])
-        store.add_location(name, d / "reference.jpg", f"Demo sidewalk (synthetic). Expected obstruction: {kind}.")
+        store.add_location(name, d / "reference.jpg", f"Demo route after a storm (synthetic). Damage: {kind}.")
         made += 1
     return made
 
@@ -97,7 +99,7 @@ def _find(folder: Path, stems: tuple[str, ...]) -> Path | None:
 
 def add_real(name: str, folder: str | Path, where: str = "", store: Store | None = None,
              to_eval: bool = False) -> int:
-    """Register a location from your own neighborhood photos. Returns the new location id."""
+    """Register a location from your own before/after-storm photos. Returns the new location id."""
     folder = Path(folder)
     if not folder.is_dir():
         raise FileNotFoundError(f"{folder} is not a folder")
@@ -105,7 +107,7 @@ def add_real(name: str, folder: str | Path, where: str = "", store: Store | None
     missing = [REAL_FILES[k][0] for k in ("reference.jpg", "initial.jpg") if not found[k]]
     if missing:
         raise FileNotFoundError(f"{folder} needs {' and '.join(m + '.jpg' for m in missing)} "
-                                "(plus cleared.jpg for the follow-up, optional)")
+                                "(plus cleared.jpg for the after-cleanup step, optional)")
     store = store or Store()
     if name.strip() in {l["name"] for l in store.locations()}:
         raise ValueError(f"A location called {name!r} already exists.")
@@ -149,9 +151,9 @@ def export_eval(demo_dir: Path, pair_slug: str, root: Path | None = None) -> lis
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="python -m clearpath.demo", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd")
-    r = sub.add_parser("real", help="add a location from your own photos (reference, blocked, cleared)")
-    r.add_argument("name", help='location name as it should appear in the app, e.g. "Oak St & 3rd"')
-    r.add_argument("folder", help="folder holding reference.jpg, blocked.jpg and optionally cleared.jpg")
+    r = sub.add_parser("real", help="add a location from your own photos (before, after the storm, after cleanup)")
+    r.add_argument("name", help='location name as it should appear in the app, e.g. "Palm St bus stop"')
+    r.add_argument("folder", help="folder holding reference.jpg (before), blocked.jpg (after the storm) and optionally cleared.jpg")
     r.add_argument("--where", default="", help="where you stood, so anyone can retake it from the same spot")
     r.add_argument("--eval", action="store_true", help="also copy the pairs to data/eval/real/ for Person 2")
     sub.add_parser("list", help="show locations and whether each has demo photos")

@@ -18,27 +18,29 @@ STATUSES = ("captured", "reviewed", "reported", "resolved", "still_blocked", "di
 STATUS_LABELS = {
     "captured": "Captured, needs review",
     "reviewed": "Reviewed, ready to report",
-    "reported": "Reported, awaiting fix",
-    "resolved": "Resolved",
+    "reported": "Reported, awaiting cleanup",
+    "resolved": "Cleared",
     "still_blocked": "Follow-up: still blocked",
-    "dismissed": "Dismissed (not an obstruction)",
+    "dismissed": "Dismissed (no storm damage)",
 }
 
+# What a hurricane leaves on neighborhood streets, sidewalks and walkways.
 OBSTRUCTION_TYPES = (
-    "Scooter or bike",
-    "Construction or barrier",
-    "Parked vehicle",
-    "Trash or debris",
-    "Sign or sandwich board",
-    "Vegetation",
-    "Standing water",
-    "Broken or damaged surface",
+    "Fallen tree or large branches",
+    "Storm debris pile",
+    "Flooding or standing water",
+    "Downed power line",
+    "Fallen sign, pole or fence",
+    "Displaced bin, vehicle or boat",
+    "Damaged or washed-out pavement",
     "Other",
 )
+# Types where people must keep away and call 911 / the utility before anything else.
+HAZARD_TYPES = ("Downed power line",)
 SEVERITIES = (
-    "Fully blocked: no way through",
-    "Partly blocked: passable with difficulty",
-    "Minor: narrows the path",
+    "Impassable: no way through",
+    "Partly blocked: passable with care",
+    "Minor: narrows the route",
 )
 
 VERDICTS = ("obstructed", "uncertain", "clear")
