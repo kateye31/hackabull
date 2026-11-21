@@ -114,6 +114,51 @@ class Reporting(unittest.TestCase):
         self.assertFalse(gemini.observe("a.jpg", "b.jpg")["available"])
 
 
+class Satellite(unittest.TestCase):
+    """Offline checks for clearpath.satellite and its use in prompts and reports."""
+
+    def _site(self):
+        import json
+        from clearpath import satellite
+        ref, cap, d = _pair(blocked=True)
+        info = {"spec": "x", "source": "esri", "layer": "1", "label": "Esri Wayback 2024-09-19",
+                "captured": "2023-02-26", "detail": "", "attribution": "", "lat": 27.9, "lon": -82.4, "zoom": 19}
+        meta = {"name": "Street", "lat": 27.92650, "lon": -82.45550, "zoom": 19,
+                "images": {ref.name: info, "initial.jpg": {**info, "source": "noaa", "label": "NOAA NGS 20241014a-rgb",
+                                                           "captured": "2024-10-14"}}}
+        meta["images"]["reference.jpg"] = meta["images"].pop(ref.name)
+        (d / "site.json").write_text(json.dumps(meta))
+        return ref, cap, satellite
+
+    def test_tile_math(self):
+        from clearpath import satellite
+        x, y = satellite._world_px(0, 0, 1)
+        self.assertEqual((x, y), (256, 256))
+
+    def test_prompt_switches_to_aerial(self):
+        ref, cap, _ = self._site()
+        mode, prompt = gemini.build_prompt(ref)
+        self.assertEqual(mode, "aerial")
+        self.assertIn("NOAA NGS 20241014a-rgb", prompt)
+        self.assertIn("captured 2023-02-26", prompt)
+        mode, _ = gemini.build_prompt(_pair(blocked=False)[0])
+        self.assertEqual(mode, "ground")
+
+    def test_report_has_coordinates_and_credits(self):
+        ref, cap, _ = self._site()
+        s = Store(_TMP / "sat.db")
+        iid = s.new_inspection(s.add_location("Street", ref))
+        c = s.add_capture(SavedCapture(iid, "initial", cap, now()))
+        s.save_comparison(c.capture_id, vision.compare(ref, cap, cap.with_name("o.png"), method="opencv"))
+        s.save_review(iid, ReviewedDetails("Storm debris pile", "Partly blocked: passable with difficulty",
+                                           "Debris at the curb.", "", "Sam", True, now()))
+        out = report.build(s.bundle(iid))
+        self.assertIn("27.92650, -82.45550", out.text)
+        self.assertIn("After imagery: NOAA NGS 20241014a-rgb, captured 2024-10-14", out.text)
+        self.assertIn("NOAA National Geodetic Survey", out.html)
+        self.assertIn("Esri World Imagery Wayback", out.html)
+
+
 class AppFlow(unittest.TestCase):
     def test_demo_inspection_end_to_end(self):
         from streamlit.testing.v1 import AppTest

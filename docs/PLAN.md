@@ -30,18 +30,24 @@ Hands off: `ComparisonResult` + overlay. Keeps initial and follow-up captures li
 - [ ] Re-tune `PATCH_THRESHOLD` (dino.py) and `OBSTRUCTED_AT` / `CLEAR_BELOW` (vision/__init__.py) on real pairs
 - [ ] Put the real evaluation table in the README and the pitch
 
-## Person 3: Gemini and reporting (`gemini-reporting`)
+## Person 3: Gemini, imagery and reporting (`gemini-reporting`)
 
-Owns: AI observations, verified campus reporting channel, editable report, export.
-Hands off: report text + printable HTML (`ReportOutput`), from saved evidence and reviewer-confirmed details.
+Owns: AI observations, before/after aerial imagery (`clearpath/satellite.py`), verified neighborhood reporting channels, editable report, export.
+Hands off: report text + printable HTML (`ReportOutput`), from saved evidence and reviewer-confirmed details. Guide: [NEIGHBORHOOD_GUIDE.md](NEIGHBORHOOD_GUIDE.md).
 
 - [x] Gemini call with structured JSON output; labeled as a draft; works without a key
 - [x] Report draft built only from confirmed review details
 - [x] Printable HTML with embedded photos, overlay and history
 - [x] Only verified channels are offered
-- [ ] Get a Gemini API key; test `gemini.observe` on real photos and tighten the prompt
-- [ ] Find the official campus channel for blocked walkways on the university website; fill in `config/channels.json` and mark it verified
-- [ ] Print the HTML report to PDF once and check that it looks right on paper
+- [x] Pivot campus → neighborhood: hazard types, report wording, Tampa channels
+- [x] Before/after aerial imagery: Esri Wayback (before) + NOAA post-Helene/Milton (after), capture dates, attribution
+- [x] Aerial-aware Gemini prompt with hazard boxes (`regions`) and a CLI test
+- [ ] Pick 2–3 demo streets with clearly visible debris (`python -m clearpath.satellite --preview`)
+- [x] Verify Gemini API access and structured output on the engineering walkway demo
+- [x] Test Gemini live on Davis Islands, Madeira Beach, and South Tampa, and tighten `AERIAL_PROMPT` to limit findings to visible areas
+- [x] Verify aerial blockage detection and overlay placement on a controlled image pair with an inserted fallen tree
+- [ ] Open each Tampa channel link yourself and put your name in `verified_by`; find the illegal-dumping page
+- [x] Print the HTML report to PDF and inspect the US Letter layout with demo photos, overlays, and follow-up history
 
 ## Together, before submitting
 

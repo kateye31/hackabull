@@ -5,4 +5,3 @@
     out = report.build(bundle, channel=channels.verified()[0])           # ReportOutput
     path = report.export(inspection_id, out)                             # printable HTML
 """
-from . import channels, gemini, report  # noqa: F401

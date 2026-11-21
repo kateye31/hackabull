@@ -1,27 +1,70 @@
 {
-  "_instructions": "Person 3: fill in the official campus channel for reporting blocked walkways (facilities work request, accessibility office, etc.). Copy the URL/email from the university's own website, then set verified to true and record who checked it and when. The app will not show a channel as verified until you do.",
+  "_instructions": "Person 3: neighborhood reporting channels. Copy URLs/phones only from the city's own website, record source_page, then set verified to true with who checked it and when. Entries marked verified by 'Claude Code (web check)' were read from the source page on 2026-11-21; a teammate should open each link once and change verified_by to their name. The USF campus ADA form used before the neighborhood pivot is in git history (commit ae9c928).",
   "channels": [
     {
-      "id": "facilities",
-      "name": "Campus facilities work request",
-      "url": "",
+      "id": "tampa-row-objects",
+      "name": "City of Tampa: Objects on streets, alleys, sidewalks (right-of-way)",
+      "url": "https://www.tampaconnect.com/CRM/s/?c__st=MOBSAFETY",
       "email": "",
-      "phone": "",
-      "source_page": "",
-      "verified": false,
-      "verified_by": "",
-      "verified_on": ""
+      "phone": "(813) 274-3101",
+      "source_page": "https://www.tampa.gov/service/objects-streets-roads-alleys-sidewalk-grass-strip-right-way",
+      "verified": true,
+      "verified_by": "Claude Code (web check)",
+      "verified_on": "2026-11-21",
+      "jurisdiction": "City of Tampa",
+      "submission_instructions": "Submit through Tampa Connect with the street name plus the two nearest cross streets or the nearest address, and attach this report. For emergency clean-up do NOT use the online form: call (813) 274-3101, answered 24 hours a day."
     },
     {
-      "id": "accessibility",
-      "name": "Campus accessibility office",
+      "id": "tampa-connect",
+      "name": "City of Tampa Customer Service Center (Tampa Connect)",
+      "url": "https://www.tampaconnect.com/CRM/s/",
+      "email": "",
+      "phone": "",
+      "source_page": "https://www.tampa.gov/construction-services/tree-information",
+      "verified": true,
+      "verified_by": "Claude Code (web check)",
+      "verified_on": "2026-11-21",
+      "jurisdiction": "City of Tampa",
+      "submission_instructions": "General City of Tampa service requests. Pick the closest request type and attach this report. Downed power lines from fallen trees are an emergency: call TECO at (813) 228-1111 instead."
+    },
+    {
+      "id": "teco-emergency",
+      "name": "Tampa Electric (TECO) emergency line: downed power lines",
+      "url": "",
+      "email": "",
+      "phone": "(813) 228-1111",
+      "source_page": "https://www.tampa.gov/construction-services/tree-information",
+      "verified": true,
+      "verified_by": "Claude Code (web check)",
+      "verified_on": "2026-11-21",
+      "jurisdiction": "Tampa Electric service area",
+      "submission_instructions": "Call for electrical emergencies such as power lines brought down by fallen trees. Stay away from the lines."
+    },
+    {
+      "id": "tampa-illegal-dumping",
+      "name": "City of Tampa: Report illegal dumping (public right-of-way)",
+      "url": "",
+      "email": "",
+      "phone": "(813) 348-1146",
+      "source_page": "",
+      "verified": false,
+      "verified_by": "",
+      "verified_on": "",
+      "jurisdiction": "City of Tampa",
+      "_todo": "Search results describe a tampa.gov dumping form and Solid Waste at (813) 348-1146, but the page (tampa.gov/node/14566) returned 404. Find the current page on tampa.gov, then fill url/source_page and verify."
+    },
+    {
+      "id": "madeira-beach",
+      "name": "City of Madeira Beach public works / storm debris",
       "url": "",
       "email": "",
       "phone": "",
       "source_page": "",
       "verified": false,
       "verified_by": "",
-      "verified_on": ""
+      "verified_on": "",
+      "jurisdiction": "City of Madeira Beach (Pinellas County)",
+      "_todo": "Needed only if you demo the Madeira Beach preset. Find the official contact on the city's website."
     }
   ]
 }

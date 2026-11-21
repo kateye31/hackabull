@@ -24,21 +24,24 @@ STATUS_LABELS = {
     "dismissed": "Dismissed (not an obstruction)",
 }
 
+# Neighborhood hazards on streets, sidewalks and the public right-of-way.
+# Works for both ground photos and before/after aerial imagery (clearpath.satellite).
 OBSTRUCTION_TYPES = (
-    "Scooter or bike",
+    "Storm debris pile",
+    "Fallen tree or limbs",
+    "Sand or sediment on road",
+    "Flooding or standing water",
+    "Illegal dumping or bulk trash",
+    "Vehicle, boat or object in right-of-way",
     "Construction or barrier",
-    "Parked vehicle",
-    "Trash or debris",
-    "Sign or sandwich board",
-    "Vegetation",
-    "Standing water",
-    "Broken or damaged surface",
+    "Damaged road or sidewalk",
+    "Damaged roof or structure",
     "Other",
 )
 SEVERITIES = (
-    "Fully blocked: no way through",
+    "Fully blocked: road or sidewalk impassable",
     "Partly blocked: passable with difficulty",
-    "Minor: narrows the path",
+    "Minor: hazard beside the road or sidewalk",
 )
 
 VERDICTS = ("obstructed", "uncertain", "clear")

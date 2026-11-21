@@ -20,6 +20,22 @@ In the app, go to **Locations → Add 3 demo locations**, then **Inspect → Sta
 
 Optional: `set GEMINI_API_KEY=...` (Windows) or `export GEMINI_API_KEY=...` before launching to turn on AI observations. Without a key, the reviewer fills in the details by hand.
 
+On macOS with zsh, enter your key at the hidden prompt and test it on an existing photo pair from the repo root:
+
+```zsh
+read -rs 'GEMINI_API_KEY?Paste Gemini API key and press Return: '
+printf '\n'
+if [[ -n "$GEMINI_API_KEY" ]]; then
+  export GEMINI_API_KEY
+  .venv/bin/python -m clearpath.reporting.gemini \
+    data/demo/engineering-walkway/reference.jpg data/demo/engineering-walkway/initial.jpg
+else
+  printf 'No Gemini key was entered.\n'
+fi
+```
+
+The demo pair checks API access and response parsing. Use two real photos of the same location to assess observation accuracy.
+
 Tests: `python -m unittest -v`
 
 ## Team
@@ -64,7 +80,7 @@ These are synthetic drawings, not photos, so the thresholds in [clearpath/vision
 
 ## Verified reporting channel
 
-[config/channels.json](config/channels.json) ships empty on purpose. Person 3 copies the official contact (URL, email or phone) from the university's own website, records `source_page`, `verified_by` and `verified_on`, and sets `verified: true`. Until then, the app warns that no verified channel exists and labels anything sent as "channel not verified."
+[config/channels.json](config/channels.json) includes the verified USF Facility and Physical Barrier Access Report Form. Complete the university form and email it to Central Human Resources ADA with the exported report as supporting evidence. For another campus, use its official website to verify the contact and record `source_page`, `verified_by`, and `verified_on` before setting `verified: true`.
 
 ## Limits
 

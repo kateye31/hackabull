@@ -231,6 +231,8 @@ def page_inspect():
         names = [c["name"] for c in vch]
         channel = vch[names.index(st.selectbox("Send to", names))]
         st.caption(f"Verified by {channel['verified_by']} on {channel['verified_on']} · {channels.contact_line(channel)}")
+        if channel.get("submission_instructions"):
+            st.caption(channel["submission_instructions"])
     else:
         st.warning("No verified campus reporting channel yet. Person 3: fill in config/channels.json from the "
                    "university's official website and mark it verified.")
