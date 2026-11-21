@@ -30,15 +30,16 @@ Then open:
 
 ## Who's doing what
 
-Two people, seven hours, features freeze at hour 4. The full checklist is in [docs/PLAN.md](docs/PLAN.md).
+Three people, seven hours, features freeze at hour 4. The full checklist is in [docs/PLAN.md](docs/PLAN.md).
 
-| | Person A — detection | Person B — app |
-| --- | --- | --- |
-| Owns | [detection/](detection/) | [app/](app/) |
-| 0–1 h | Gather before/after views | Crew map + report form |
-| 1–3 h | Find new water | Issue cards, priority rules, cost ranges |
-| 3–4 h | Connect detection to the map | Status updates, polish |
-| 4–7 h | Measure results | Pitch, demo video, submission |
+| | Person A — detection | Person B — app | Person C — research & pitch |
+| --- | --- | --- | --- |
+| Branch | `detection` | `app` | `pitch` |
+| Owns | [detection/](detection/) | [app/](app/) | [docs/](docs/) |
+| 0–1 h | Set up the real scene once C sends images | Crew map + report form | Find real before/after images and cost sources |
+| 1–3 h | Find new water | Issue cards, priority rules, cost ranges | Download FloodNet for A; start the slides |
+| 3–4 h | Connect detection to the map | Status updates, polish | Phone test; time a new user |
+| 4–7 h | Measure results | Fix bugs from testing; run the live demo | Pitch, demo video, submission |
 
 The hand-off between the two halves is one file: `data/scenes/<scene>/detections.json`. Detection writes it; the server loads every one at startup.
 
