@@ -1,9 +1,10 @@
-"""Make synthetic reference/capture pairs of a campus walkway for testing and evaluation.
+"""Make synthetic before/after pairs of a neighborhood street after a hurricane, for testing and evaluation.
 
 Each pair is a clear-path reference plus a later capture that is either
   * clear      - same path, but different light, a shadow, a slightly different
                  camera position, sensor noise (the things that fool pixel diffs)
-  * obstructed - all of the above plus a scooter, cone, barrier, bin, box or sign
+  * obstructed - all of the above plus storm damage: a fallen tree, scattered branches,
+                 a debris pile, flood water, a blown-over trash bin or sign
 
     python -m evaluation.make_synthetic                  # data/eval/synthetic, 40 pairs
     python -m evaluation.make_synthetic --n 80 --seed 2
@@ -21,7 +22,10 @@ import cv2
 import numpy as np
 
 W, H = 640, 480
-OBJECTS = ("scooter", "cone", "barrier", "bin", "box", "sign")
+# what a hurricane leaves on a neighborhood street or sidewalk
+OBJECTS = ("tree", "branches", "debris", "water", "bin", "sign")
+# older everyday obstacles, still drawable by name
+EXTRA_OBJECTS = ("scooter", "cone", "barrier", "box")
 
 
 def _noise(rng, shape, s):
@@ -29,7 +33,7 @@ def _noise(rng, shape, s):
 
 
 def scene(rng) -> tuple[np.ndarray, np.ndarray]:
-    """A walkway in perspective. Returns (image, path mask)."""
+    """A street or sidewalk in perspective. Returns (image, path mask)."""
     img = np.zeros((H, W, 3), np.float32)
     horizon = int(rng.integers(150, 200))
     sky = np.array(rng.choice([(150, 190, 230), (170, 200, 225), (200, 210, 220)]), np.float32)
@@ -44,7 +48,7 @@ def scene(rng) -> tuple[np.ndarray, np.ndarray]:
     grass = np.array(rng.choice([(80, 130, 60), (95, 140, 70), (70, 115, 55)]), np.float32)
     img[horizon:] = grass
     img[horizon:] += cv2.GaussianBlur(_noise(rng, (H - horizon, W, 3), 22), (0, 0), 1.2)
-    # walkway trapezoid
+    # street/sidewalk trapezoid
     cx = W // 2 + int(rng.integers(-60, 60))
     near_w, far_w = int(rng.integers(300, 420)), int(rng.integers(40, 80))
     poly = np.array([[cx - far_w // 2, horizon], [cx + far_w // 2, horizon],
@@ -102,6 +106,41 @@ def obstacle(img, rng, path, kind: str):
     elif kind == "box":
         cv2.rectangle(img, (x - S(35), y - S(45)), (x + S(35), y), (175, 135, 85), -1)
         cv2.line(img, (x - S(35), y - S(30)), (x + S(35), y - S(30)), (140, 105, 60), S(3))
+    elif kind == "tree":  # fallen trunk across the path with leafy limbs
+        dx = S(150)
+        tilt = int(rng.integers(-S(25), S(25) + 1))
+        a, b = (x - dx, y - tilt), (x + dx, y + tilt)
+        for t in np.linspace(0.15, 0.9, 5):
+            bx, by = int(a[0] + t * (b[0] - a[0])), int(a[1] + t * (b[1] - a[1]))
+            ex, ey = bx + int(rng.integers(-S(40), S(40) + 1)), by - int(rng.integers(S(30), S(70) + 1))
+            cv2.line(img, (bx, by), (ex, ey), (85, 62, 40), max(S(6), 1))
+            for _ in range(4):
+                cv2.circle(img, (ex + int(rng.integers(-S(18), S(18) + 1)), ey + int(rng.integers(-S(14), S(14) + 1))),
+                           max(S(15), 2), (int(rng.integers(40, 70)), int(rng.integers(85, 115)), 35), -1)
+        cv2.line(img, a, b, (95, 70, 45), max(S(18), 2))
+    elif kind == "branches":  # scattered limbs and leaves
+        for _ in range(int(rng.integers(6, 10))):
+            cx, cy = x + int(rng.integers(-S(70), S(70) + 1)), y - int(rng.integers(0, S(40) + 1))
+            ang = rng.uniform(0, np.pi)
+            L = int(rng.integers(S(35), S(80) + 1))
+            p1 = (int(cx - L * np.cos(ang) / 2), int(cy - L * np.sin(ang) / 4))
+            p2 = (int(cx + L * np.cos(ang) / 2), int(cy + L * np.sin(ang) / 4))
+            cv2.line(img, p1, p2, (90, 66, 42), max(S(5), 1))
+            cv2.circle(img, p2, max(S(10), 2), (55, 100, 40), -1)
+    elif kind == "debris":  # boards, shingles and a torn tarp
+        for col in ((40, 90, 170), (165, 135, 95), (70, 70, 78), (165, 135, 95), (190, 185, 175), (70, 70, 78)):
+            c = (float(x + rng.integers(-S(55), S(55) + 1)), float(y - rng.integers(0, S(35) + 1)))
+            size = (float(rng.integers(S(30), S(75) + 1)), float(rng.integers(S(8), S(30) + 1)))
+            box = cv2.boxPoints((c, size, float(rng.uniform(0, 180)))).astype(np.int32)
+            cv2.fillPoly(img, [box], col)
+    elif kind == "water":  # murky standing flood water
+        m = np.zeros(img.shape[:2], np.uint8)
+        cv2.ellipse(m, (x, y - S(10)), (S(140), S(40)), float(rng.uniform(-6, 6)), 0, 360, 1, -1)
+        m = cv2.GaussianBlur(m.astype(np.float32), (0, 0), max(s * 3, 1))[..., None]
+        water = np.empty_like(img)
+        water[:] = (112, 104, 82)
+        water += _noise(rng, img.shape, 5)
+        img[:] = img * (1 - 0.9 * m) + water * (0.9 * m)
     elif kind == "sign":
         pts = np.array([[x, y - S(80)], [x - S(28), y], [x + S(28), y]], np.int32)
         cv2.fillPoly(img, [pts], (245, 215, 40))
@@ -113,7 +152,7 @@ def obstacle(img, rng, path, kind: str):
 def recapture(img, rng, hard: bool):
     """Same place, later: new light, maybe a shadow, slightly different camera."""
     out = img.copy()
-    if hard:  # a long shadow across the walkway
+    if hard:  # a long shadow across the street
         pts = np.array([[int(rng.integers(0, W)), H], [int(rng.integers(0, W)), int(H * 0.5)],
                         [int(rng.integers(0, W)), int(H * 0.45)], [int(rng.integers(0, W)), H]], np.int32)
         m = np.zeros((H, W), np.uint8)

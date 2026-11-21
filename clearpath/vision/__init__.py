@@ -16,7 +16,7 @@ from . import baseline, dino
 from .align import align, load_rgb
 
 # Verdict cut-offs on the LARGEST changed region (share of the image).
-# Set from synthetic pairs only - re-tune on real campus photos with evaluation/evaluate.py.
+# Set from synthetic pairs only - re-tune on real neighborhood photos with evaluation/evaluate.py.
 OBSTRUCTED_AT = {"dinov2": 0.05, "opencv": 0.05}
 CLEAR_BELOW = {"dinov2": 0.02, "opencv": 0.015}
 

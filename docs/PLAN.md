@@ -26,7 +26,9 @@ Hands off: `ComparisonResult` + overlay. Keeps initial and follow-up captures li
 - [x] Overlay image with changed regions outlined
 - [x] SQLite store; each inspection copies its reference path so follow-ups use the same one
 - [x] Synthetic pairs + evaluation script (DINOv2 vs OpenCV)
-- [ ] Collect 15–30 real pairs on campus (clear and blocked, different light) into `data/eval/real/`
+- [x] Storm-damage synthetic pairs (tree, branches, debris, flood water, bin, sign) and re-run evaluation
+- [x] Real-photo pilot (campus/indoor, backpack): method check only, kept in the README
+- [ ] Collect 15–30 real **neighborhood** pairs with staged storm debris (clear, blocked, cleared, shadow, wet) into `data/eval/real/`
 - [ ] Re-tune `PATCH_THRESHOLD` (dino.py) and `OBSTRUCTED_AT` / `CLEAR_BELOW` (vision/__init__.py) on real pairs
 - [ ] Put the real evaluation table in the README and the pitch
 

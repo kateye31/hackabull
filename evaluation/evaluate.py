@@ -4,7 +4,7 @@
     python -m evaluation.evaluate data/eval/real --out results.md
 
 A pair folder holds reference.jpg + capture.jpg; labels.csv lists pair_id,label
-(label = obstructed | clear). Add real pairs from campus the same way.
+(label = obstructed | clear). Add real neighborhood pairs the same way.
 
 Reports, per method: accuracy of the obstructed/clear call, precision and recall
 for "obstructed", how often clear paths with shadows were wrongly flagged, how

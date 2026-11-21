@@ -1,6 +1,6 @@
 """SQLite storage (Person 2).
 
-locations    a spot on campus and its clear-path reference photo
+locations    a neighborhood spot and its before-storm reference photo
 inspections  one problem at one location. Copies the reference path at creation,
              so the initial and follow-up captures are always compared against the
              SAME clear-path reference, even if the location's photo is replaced later.
