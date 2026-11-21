@@ -14,7 +14,7 @@ import streamlit as st
 
 import os
 
-from clearpath import capture, config, demo, geo, mapview, pipeline, vision
+from clearpath import capture, config, demo, geo, mapview, pipeline, satellite, vision
 from clearpath.vision import aerial
 from clearpath.contracts import (HAZARD_TYPES, OBSTRUCTION_TYPES, PHASE_LABELS, SEVERITIES, STATUS_LABELS,
                                  ReviewedDetails)
@@ -51,36 +51,55 @@ POWER_LINE_WARNING = ("**Downed power line? Stay at least 35 feet (10 m) away an
 
 
 # ---------------------------------------------------------------- helpers
-def photo_input(key: str, reference_path: str | None = None, phase: str = "initial") -> bytes | None:
-    """Camera, upload, or (for demo locations) a prepared photo. Returns image bytes once chosen."""
+def photo_input(key: str, reference_path: str, phase: str = "initial", *, overhead: str | None = None) -> tuple[bytes, Path | None] | None:
     options = ["Camera", "Upload"]
-    demo_path = demo.demo_photo(reference_path, phase) if reference_path else None
+    demo_path = demo.demo_photo(reference_path, phase)
+    aerial = bool(overhead or satellite.site_meta(reference_path))
+    if demo_path and satellite.site_meta(reference_path) and not satellite.imagery_for(reference_path, demo_path):
+        demo_path = None
     if demo_path:
         options.append("Demo photo")
     src = st.radio("Photo source", options, horizontal=True, key=f"{key}_src",
-                   index=len(options) - 1 if demo_path else 0)
+                   index=1 if aerial else len(options) - 1 if demo_path else 0)
     if src == "Camera":
-        f = st.camera_input("Take a photo from where the before-storm photo was taken", key=f"{key}_cam")
-        return f.getvalue() if f else None
+        label = "Photograph the street or sidewalk at ground level" if aerial else "Take a photo from where the reference was taken"
+        f = st.camera_input(label, key=f"{key}_cam")
+        return (f.getvalue(), None) if f else None
     if src == "Upload":
         f = st.file_uploader("Upload a photo", type=["jpg", "jpeg", "png", "webp"], key=f"{key}_up")
-        return f.getvalue() if f else None
+        return (f.getvalue(), None) if f else None
     st.image(str(demo_path), caption="Demo photo", width=320)
-    return demo_path.read_bytes()
+    return demo_path.read_bytes(), demo_path
 
 
-def process_capture(inspection_id: str, phase: str, image_bytes: bytes, reference_path: str):
+def process_capture(inspection_id: str, phase: str, photo: tuple[bytes, Path | None], reference_path: str):
     """Save -> compare -> damage analysis -> Gemini -> response plan (clearpath/pipeline.py)."""
     with st.status("Checking the photo…", expanded=True) as s:
         st.write("Saving photo")
+        image_bytes, demo_path = photo
         cap = pipeline.save_photo(store, inspection_id, phase, image_bytes)
-        pipeline.analyse(store, cap, reference_path, progress=st.write)
+        pipeline.analyse(store, cap, reference_path, progress=st.write, demo_path=demo_path)
         s.update(label="Photo checked", state="complete")
 
 
 def show_comparison(bundle: dict, phase: str):
     cap = bundle[phase]
     comp = cap["comparison"]
+    obs = cap.get("observation") or {}
+    if obs.get("mode") == "mixed":
+        overlay = obs.get("overlay_path")
+        columns = st.columns(3 if overlay else 2)
+        columns[0].image(obs["reference_path"], caption="Before: satellite reference" if satellite.site_meta(obs["reference_path"]) else "Satellite location reference", width="stretch")
+        columns[1].image(cap["image_path"], caption=f"{PHASE_LABELS[phase]} ground photo", width="stretch")
+        if overlay:
+            columns[2].image(overlay, caption="Possible obstruction marked by Gemini", width="stretch")
+        st.caption("The satellite image provides location context. Review the ground photo to confirm the obstruction.")
+        if phase == "follow_up":
+            show_observation(obs)
+        return
+    if not comp:
+        st.image(cap["image_path"], caption=f"{PHASE_LABELS[phase]} photo", width="stretch")
+        return
     c1, c2, c3 = st.columns(3)
     c1.image(bundle["reference_path"], caption="Before the storm", width="stretch")
     c2.image(cap["image_path"], caption=f"{PHASE_LABELS[phase]} photo", width="stretch")
@@ -101,7 +120,7 @@ def show_comparison(bundle: dict, phase: str):
 
 def show_damage(comp: dict):
     """CLIP damage type + SegFormer walkway equations (clearpath/vision/ml.py)."""
-    dmg = comp.get("details", {}).get("damage")
+    dmg = (comp or {}).get("details", {}).get("damage")
     if not dmg:
         return
     if dmg.get("available") is False:
@@ -300,14 +319,16 @@ def page_report():
         return
     by_name = {l["name"]: l for l in locs}
     loc = by_name[st.selectbox("Which spot is it?", list(by_name))]
-    st.image(loc["reference_path"], caption="Before the storm. Take your photo from about where this was taken.", width=420)
-    img = photo_input("resident", loc["reference_path"], "initial")
+    overhead = pipeline.aerial_reference(loc["reference_path"], loc)
+    st.image(overhead or loc["reference_path"], caption="Location reference", width=420)
+    img = photo_input("resident", loc["reference_path"], "initial", overhead=overhead)
     note = st.text_area("What did you see? (optional)", height=80,
                         placeholder="e.g. a big branch across the sidewalk, no way past with a wheelchair")
     if img and st.button("Send report", type="primary"):
-        iid, cap = pipeline.new_report(store, loc["id"], img, note)
+        image_bytes, demo_path = img
+        iid, cap = pipeline.new_report(store, loc["id"], image_bytes, note)
         with st.status("Checking the photo…", expanded=True) as s:
-            pipeline.analyse(store, cap, loc["reference_path"], progress=st.write)
+            pipeline.analyse(store, cap, loc["reference_path"], progress=st.write, demo_path=demo_path)
             s.update(label="Photo checked", state="complete")
         st.session_state.submitted = iid
         st.rerun()
@@ -370,7 +391,8 @@ def page_review():
     # 1. initial capture
     st.subheader("1. After-storm photo")
     if not b["initial"]:
-        img = photo_input(f"{iid}_initial", b["reference_path"], "initial")
+        img = photo_input(f"{iid}_initial", b["reference_path"], "initial",
+                          overhead=pipeline.aerial_reference(b["reference_path"], loc))
         if img and st.button("Check this photo", type="primary"):
             process_capture(iid, "initial", img, b["reference_path"])
             st.rerun()
@@ -475,7 +497,8 @@ def page_review():
     st.subheader("4. After cleanup")
     st.write("Come back after the crew has been and take a photo from the same spot. It's compared with the **same** before-storm photo.")
     if not b["follow_up"] or st.session_state.get(f"retake_{iid}"):
-        img = photo_input(f"{iid}_follow", b["reference_path"], "follow_up")
+        img = photo_input(f"{iid}_follow", b["reference_path"], "follow_up",
+                          overhead=pipeline.aerial_reference(b["reference_path"], loc))
         if img and st.button("Check after-cleanup photo", type="primary"):
             process_capture(iid, "follow_up", img, b["reference_path"])
             st.session_state.pop(f"retake_{iid}", None)

@@ -6,9 +6,10 @@ and the residents' backend (api/main.py), so both behave the same.
 """
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Callable
 
-from . import capture, config, geo, vision
+from . import capture, config, geo, satellite, vision
 from .contracts import ComparisonResult, SavedCapture
 from .reporting import gemini, plan, resources
 from .store import Store
@@ -50,16 +51,42 @@ def save_photo(store: Store, inspection_id: str, phase: str, image_bytes: bytes)
     return store.add_capture(capture.save_capture(image_bytes, inspection_id, phase))
 
 
-def analyse(store: Store, cap: SavedCapture, reference_path: str, progress: Callable[[str], None] = _noop):
-    progress("Comparing with the before-storm photo")
+def aerial_reference(reference_path: str, location: dict) -> str | None:
+    """Prefer a dated satellite site; use stored overhead imagery as context otherwise."""
+    if satellite.site_meta(reference_path):
+        return reference_path
+    path = location.get("satellite_path")
+    return path if path and Path(path).is_file() else None
+
+
+def analyse(store: Store, cap: SavedCapture, reference_path: str, progress: Callable[[str], None] = _noop,
+            *, demo_path: Path | None = None):
     overlay = config.OVERLAYS / cap.inspection_id / f"{cap.phase}_{cap.capture_id}.png"
-    from .satellite import site_meta  # Person 3's aerial sites (Esri before / NOAA after)
-    result: ComparisonResult = vision.compare(reference_path, cap.image_path, overlay,
-                                              aerial=site_meta(reference_path) is not None)
-    store.save_comparison(cap.capture_id, result)
+    location = store.bundle(cap.inspection_id)["location"]
+    overhead = aerial_reference(reference_path, location)
+    after = satellite.imagery_for(reference_path, demo_path) if demo_path else None
+    before = satellite.imagery_for(reference_path, reference_path)
+    result = None
+    if overhead and not demo_path:
+        progress("Reviewing the ground photo with the satellite reference")
+        imagery = {"mode": "mixed", "before": before}
+        obs = gemini.observe(overhead, cap.image_path, imagery=imagery)
+        obs.update(mode="mixed", reference_path=overhead)
+        if gemini.draw_regions(cap.image_path, obs.get("regions", []), overlay):
+            obs["overlay_path"] = str(overlay)
+        store.save_observation(cap.capture_id, obs)
+    else:
+        progress("Comparing with the before-storm photo")
+        result: ComparisonResult = vision.compare(reference_path, cap.image_path, overlay, aerial=bool(after))
+        if after:
+            result.details["imagery"] = after
+        store.save_comparison(cap.capture_id, result)
+        if cap.phase == "initial":
+            progress("Asking Gemini what it sees")
+            imagery = {"before": before, "after": after} if after else None
+            store.save_observation(cap.capture_id, gemini.observe(
+                reference_path, cap.image_path, result.to_dict(), imagery=imagery))
     if cap.phase == "initial":
-        progress("Asking Gemini what it sees")
-        store.save_observation(cap.capture_id, gemini.observe(reference_path, cap.image_path, result.to_dict()))
         progress("Finding crews and resources nearby")
         refresh_plan(store, cap.inspection_id)
     return result

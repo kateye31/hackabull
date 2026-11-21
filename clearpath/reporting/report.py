@@ -29,6 +29,8 @@ def draft_text(bundle: dict, channel: dict | None = None) -> str:
     ins = bundle["inspection"]
     initial = bundle.get("initial") or {}
     comp = initial.get("comparison") or {}
+    obs = initial.get("observation") or {}
+    mixed = obs.get("mode") == "mixed"
     lines = [
         f"Subject: Storm damage blocking {loc['name']} ({ins['id']})",
         "",
@@ -40,28 +42,30 @@ def draft_text(bundle: dict, channel: dict | None = None) -> str:
     site = satellite.site_meta(bundle["reference_path"])
     if site:
         lines += [f"Coordinates: {site['lat']:.5f}, {site['lon']:.5f} ({satellite.maps_link(site['lat'], site['lon'])})"]
-        for fname, label in (("reference.jpg", "Before imagery"), ("initial.jpg", "After imagery")):
-            info = site["images"].get(fname)
+        for info, label in ((site["images"].get("reference.jpg"), "Before imagery"),
+                            ((comp.get("details") or {}).get("imagery"), "After imagery")):
             if info:
                 lines += [f"{label}: {info['label']}" + (f", captured {info['captured']}" if info.get("captured") else "")]
     lines += [
         "",
         review["description"].strip(),
         "",
-        "Evidence: a before image, the image showing the hazard, and a highlighted comparison",
-        "are in the attached printable report.",
+        ("Evidence: the satellite reference and submitted ground photo are in the attached printable report."
+         if mixed else "Evidence: a before image, the image showing the hazard, and a highlighted comparison "
+         "are in the attached printable report."),
     ]
     if comp:
         lines += ["", f"Photo comparison ({comp['method']}): about {comp['changed_fraction']:.0%} of the scene changed "
                       f"versus the before image (verdict: {comp['verdict']})."]
-    obs = initial.get("observation") or {}
     if obs.get("available"):
         lines += [f"AI-generated observations ({obs['model']}) were checked by the reviewer before sending."]
     fu = bundle.get("follow_up")
     if fu:
         fc = fu.get("comparison") or {}
-        lines += ["", f"Follow-up photo {_when(fu.get('captured_at'))}: "
-                      f"{fc.get('verdict', 'not compared')} ({fc.get('changed_fraction', 0):.0%} changed)."]
+        follow_up = f"Follow-up photo {_when(fu.get('captured_at'))}"
+        if fc:
+            follow_up += f": {fc['verdict']} ({fc['changed_fraction']:.0%} changed)."
+        lines += ["", follow_up]
     lines += ["", f"Reported by: {review['reviewer']}", f"Inspection ID: {ins['id']}"]
     if channel:
         lines += [f"Reporting channel: {channel['name']} ({channels_mod.contact_line(channel)})"]
@@ -82,21 +86,34 @@ def render_html(bundle: dict, text: str, channel: dict | None = None) -> str:
     site = satellite.site_meta(bundle["reference_path"])
     imgs = (site or {}).get("images", {})
 
-    def src(fname):
-        i = imgs.get(fname)
+    def src(i):
         return f"{i['label']}" + (f" · captured {i['captured']}" if i.get("captured") else "") if i else ""
 
-    figs = [("Before (reference)", bundle["reference_path"], src("reference.jpg"))]
+    before = imgs.get("reference.jpg")
+    initial_obs = ((bundle.get("initial") or {}).get("observation") or {})
+    before_path = initial_obs.get("reference_path") or bundle["reference_path"]
+    before_label = "Before (satellite reference)" if site else (
+        "Satellite location reference" if initial_obs.get("mode") == "mixed" else "Before (reference)")
+    figs = [(before_label, before_path, src(before))]
+    used = {before["source"]} if before else set()
     for phase in ("initial", "follow_up"):
         cap = bundle.get(phase)
         if not cap:
             continue
         comp = cap.get("comparison") or {}
-        cap_note = src("initial.jpg" if phase == "initial" else "followup.jpg") or _when(cap["captured_at"])
-        figs.append((f"{PHASE_LABELS[phase]} photo", cap["image_path"], cap_note))
+        obs = cap.get("observation") or {}
+        info = (comp.get("details") or {}).get("imagery")
+        if info:
+            used.add(info["source"])
+        cap_note = src(info) or _when(cap["captured_at"])
+        photo_label = "ground photo" if obs.get("mode") == "mixed" else "photo"
+        figs.append((f"{PHASE_LABELS[phase]} {photo_label}", cap["image_path"], cap_note))
         if comp.get("overlay_path"):
             figs.append((f"{PHASE_LABELS[phase]}: changes highlighted", comp["overlay_path"],
                          f"{comp['verdict']} · {comp['changed_fraction']:.0%} changed · {comp['method']}"))
+        if obs.get("overlay_path"):
+            figs.append((f"{PHASE_LABELS[phase]}: possible obstruction marked by Gemini",
+                         obs["overlay_path"], "AI draft"))
     fig_html = "\n".join(
         f'<figure><img src="{_img(p)}" alt="{esc(t)}"><figcaption><b>{esc(t)}</b><br>{esc(n)}</figcaption></figure>'
         for t, p, n in figs if _img(p))
@@ -107,7 +124,6 @@ def render_html(bundle: dict, text: str, channel: dict | None = None) -> str:
             ch += f'<p>{esc(channel["submission_instructions"])}</p>'
     events = "".join(f"<li>{esc(STATUS_LABELS.get(e['status'], e['status']))} · {esc(_when(e['at']))}</li>"
                      for e in bundle.get("events", []))
-    used = {i["source"] for i in imgs.values()}
     credits = "".join(f'<p class="fine">{esc(satellite.ATTRIBUTION[k])}</p>' for k in sorted(used))
     if site:
         ch += (f'<p class="meta">Location: {site["lat"]:.5f}, {site["lon"]:.5f} · '
@@ -145,7 +161,7 @@ def render_html(bundle: dict, text: str, channel: dict | None = None) -> str:
   <pre>{esc(text)}</pre>
   <div class="grid">{fig_html}</div>
   <h3>History</h3><ul>{events}</ul>
-  <p class="fine">Images were compared automatically and every detail above was confirmed by a person before sending.</p>
+  <p class="fine">The reviewer confirmed the report details. Any Gemini markings are draft annotations.</p>
   {credits}
   <p class="noprint fine">Use your browser's Print command to save as PDF.</p>
 </body></html>"""
