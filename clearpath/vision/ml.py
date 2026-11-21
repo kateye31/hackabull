@@ -111,6 +111,18 @@ def classify_damage(rgb: np.ndarray, top: int = 3) -> list[dict]:
     return [{"type": inv[o["label"]], "score": round(float(o["score"]), 3)} for o in out[:top]]
 
 
+VIEW_PROMPTS = ("an aerial photo of houses and streets taken from straight above",
+                "a photo taken at street level by a person")
+
+
+def is_street_photo(rgb: np.ndarray, threshold: float = 0.8) -> bool:
+    """True for a street-level photo. On real images: NOAA/Esri aerials scored 1.00 aerial,
+    four real post-hurricane street photos scored 0.92-1.00 street."""
+    from PIL import Image
+    out = _clip()(Image.fromarray(rgb), candidate_labels=list(VIEW_PROMPTS))
+    return out[0]["label"] == VIEW_PROMPTS[1] and out[0]["score"] >= threshold
+
+
 def walkable_mask(rgb: np.ndarray) -> np.ndarray:
     """Boolean mask of walkable/drivable surface (SegFormer, ADE20K classes)."""
     import torch

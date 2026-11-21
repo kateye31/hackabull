@@ -38,6 +38,9 @@ OBSTRUCTION_TYPES = (
     "Construction or barrier",
     "Damaged road or sidewalk",
     "Damaged roof or structure",
+    "Flooded home",
+    "Flooded or damaged vehicle",
+    "Tree blocking driveway",
     "Other",
 )
 # Types where people must keep away and call 911 / the utility before anything else.
@@ -60,6 +63,7 @@ class SavedCapture:
     image_path: Path
     captured_at: str         # ISO 8601, UTC
     capture_id: int | None = None
+    known_aerial: bool = False
 
     def __post_init__(self):
         if self.phase not in PHASES:

@@ -67,7 +67,7 @@ def seed(store: Store | None = None) -> int:
     store = store or Store()
     existing = {l["name"] for l in store.locations()}
     made = 0
-    for name, kind, seed_ in SPOTS:
+    for index, (name, kind, seed_) in enumerate(SPOTS):
         if name in existing:
             continue
         rng = np.random.default_rng(seed_)
@@ -81,7 +81,7 @@ def seed(store: Store | None = None) -> int:
                            ("followup.jpg", recapture(base, rng, hard=False))):
             cv2.imwrite(str(d / fname), cv2.cvtColor(img, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 90])
         loc_id = store.add_location(name, d / "reference.jpg", f"Demo route after a storm (synthetic). Damage: {kind}.")
-        north, east = SPOT_OFFSETS_M[len(existing) + made] if len(existing) + made < len(SPOT_OFFSETS_M) else (0, 0)
+        north, east = SPOT_OFFSETS_M[index]
         lat, lon = geo.offset(*config.DEMO_CENTER, north, east)
         from .pipeline import add_geo  # satellite image + canopy; skipped quietly when offline
         add_geo(store, loc_id, lat, lon)

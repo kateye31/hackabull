@@ -47,22 +47,57 @@ def locate(store: Store, image_bytes: bytes, lat: float | None = None, lon: floa
 
 
 def save_photo(store: Store, inspection_id: str, phase: str, image_bytes: bytes) -> SavedCapture:
-    return store.add_capture(capture.save_capture(image_bytes, inspection_id, phase))
+    from . import demo, satellite
+    cap = store.add_capture(capture.save_capture(image_bytes, inspection_id, phase))
+    ref = store.bundle(inspection_id)["reference_path"]
+    expected = demo.demo_photo(ref, phase) if satellite.site_meta(ref) else None
+    cap.known_aerial = bool(expected and expected.read_bytes() == image_bytes)
+    return cap
 
 
 def analyse(store: Store, cap: SavedCapture, reference_path: str, progress: Callable[[str], None] = _noop):
     progress("Comparing with the before-storm photo")
     overlay = config.OVERLAYS / cap.inspection_id / f"{cap.phase}_{cap.capture_id}.png"
     from .satellite import site_meta  # Person 3's aerial sites (Esri before / NOAA after)
-    result: ComparisonResult = vision.compare(reference_path, cap.image_path, overlay,
-                                              aerial=site_meta(reference_path) is not None)
+    aerial_site = site_meta(reference_path) is not None
+    street = aerial_site and not cap.known_aerial
+    if street:  # a resident's street photo can't be compared pixel-for-pixel with an aerial before-image
+        result = _street_photo_result(cap, overlay)
+    else:
+        result = vision.compare(reference_path, cap.image_path, overlay, aerial=aerial_site)
     store.save_comparison(cap.capture_id, result)
     if cap.phase == "initial":
         progress("Asking Gemini what it sees")
-        store.save_observation(cap.capture_id, gemini.observe(reference_path, cap.image_path, result.to_dict()))
+        store.save_observation(cap.capture_id, gemini.observe(
+            reference_path, cap.image_path, None if street else result.to_dict(),
+            imagery={"mixed_views": True} if street else None))  # {} = ground prompt even at an aerial site
         progress("Finding crews and resources nearby")
         refresh_plan(store, cap.inspection_id)
     return result
+
+
+def _street_photo_result(cap: SavedCapture, overlay) -> ComparisonResult:
+    """No pixel comparison possible: keep the photo, suggest the damage type, let the reviewer judge."""
+    from PIL import Image
+    from .vision import ml
+    from .vision.align import load_rgb
+    overlay.parent.mkdir(parents=True, exist_ok=True)
+    with Image.open(cap.image_path) as photo:
+        photo.save(overlay, format="PNG")
+    dmg = {"available": False, "street": True,
+           "reason": "Street photo at a spot that only has an aerial before-image, so there's nothing to measure "
+                     "it against. The damage type is a suggestion from the photo alone."}
+    try:
+        sugg = ml.classify_damage(load_rgb(cap.image_path))
+        dmg["suggestions"] = sugg
+        dmg["likely_type"] = next((x["type"] for x in sugg if x["type"] != "None"), None)
+    except ml.MLUnavailable:
+        pass
+    return ComparisonResult(method="none", score=0.0, changed_fraction=0.0, largest_region=0.0, verdict="uncertain",
+                            overlay_path=overlay, aligned=False,
+                            details={"alignment": {"aligned": False, "inliers": 0,
+                                                   "reason": "street photo vs aerial before-image"},
+                                     "damage": dmg})
 
 
 def refresh_plan(store: Store, inspection_id: str) -> dict:

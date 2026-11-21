@@ -22,8 +22,107 @@ from clearpath.pipeline import RESIDENT_NOTE
 from clearpath.reporting import channels, gemini, report
 from clearpath.store import Store, now
 
-st.set_page_config(page_title="ClearPath", page_icon="♿", layout="wide")
+st.set_page_config(page_title="ClearPath · Reviewer", page_icon="♿", layout="wide")
 config.ensure_dirs()
+
+# The residents' site's hi-vis vest world (DESIGN.md), held back for a working screen.
+STYLE = """
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root { --hivis:#d4f000; --hivis-ink:#1b1d0e; --reflect:#c9ced3; --ink:#16181a; --ink-2:#55595e;
+        --line:#dfe2db; --panel:#f5f6f2; --red:#b3261e; --orange:#c25e00; --amber:#9a7400; --green:#2e7d32; --gray:#6b7177; }
+html, body, .stMarkdown, p, label, h1, h2, h3, h4, input, textarea, [data-testid="stMetricValue"], [data-testid="stMetricLabel"],
+[data-testid="stBaseButton-primary"] p, [data-testid="stBaseButton-secondary"] p { font-family: "Atkinson Hyperlegible", system-ui, sans-serif; }
+::selection { background: var(--hivis); color: var(--hivis-ink); }
+.stAppDeployButton, [data-testid="stDecoration"] { display: none !important; }
+[data-testid="stHeader"] { background: transparent; }
+.block-container, [data-testid="stMainBlockContainer"] { padding-top: 1.25rem; max-width: 1180px; }
+h1 { font-size: 1.85rem !important; letter-spacing: -0.01em; }
+h2 { font-size: 1.3rem !important; }
+h3 { font-size: 1.1rem !important; color: var(--ink); }
+
+/* brand band: the vest, with its two retroreflective stripes */
+.cp-band { background: var(--hivis); color: var(--hivis-ink); border-radius: 12px; overflow: hidden; margin: 0 0 1.25rem; }
+.cp-band .in { display: flex; align-items: baseline; gap: .75rem; padding: .7rem 1.1rem .55rem; flex-wrap: wrap; }
+.cp-band b { font-size: 1.2rem; letter-spacing: .01em; }
+.cp-band span { font-size: .95rem; opacity: .85; }
+.cp-band i { display: block; height: 14px; background:
+  linear-gradient(var(--reflect), var(--reflect)) 0 2px / 100% 4px no-repeat,
+  linear-gradient(var(--reflect), var(--reflect)) 0 8px / 100% 4px no-repeat, var(--hivis); }
+
+/* sidebar: charcoal, like the vest's trim */
+[data-testid="stSidebar"] { background: #16181a; }
+[data-testid="stSidebar"] * { color: #e7eaec; }
+[data-testid="stSidebar"] .stCaption, [data-testid="stSidebar"] small { color: #aab1b7 !important; }
+[data-testid="stSidebar"] a { color: var(--hivis) !important; }
+[data-testid="stSidebar"] hr { border-color: #2c3034; }
+[data-testid="stSidebar"] [role="radiogroup"] label { padding: .35rem .5rem; border-radius: 8px; }
+[data-testid="stSidebar"] [role="radiogroup"] label:hover { background: #22262a; }
+[data-testid="stSidebar"] [role="radiogroup"] label:has(input:checked) { background: #2a2f1a; }
+.cp-side-brand { display: flex; align-items: center; gap: .6rem; margin: .25rem 0 .9rem; }
+.cp-side-brand .mark { width: 34px; height: 34px; border-radius: 8px; background: var(--hivis);
+  box-shadow: inset 0 -8px 0 -4px var(--reflect); }
+.cp-side-brand b { font-size: 1.15rem; color: #fff !important; }
+.cp-stat { display: flex; justify-content: space-between; gap: .5rem; font-size: .85rem; padding: .3rem 0;
+  border-bottom: 1px solid #2c3034; }
+.cp-stat span:first-child { color: #aab1b7 !important; }
+.cp-stat .on { color: var(--hivis) !important; font-weight: 700; }
+
+/* buttons: the one primary action wears hi-vis */
+[data-testid="stBaseButton-primary"] { background: var(--hivis) !important; color: var(--hivis-ink) !important;
+  border: 0 !important; font-weight: 700; box-shadow: inset 0 -5px 0 -1px var(--reflect), 0 1px 3px rgb(0 0 0 / .15); }
+[data-testid="stBaseButton-primary"]:hover { filter: brightness(.96); }
+[data-testid="stBaseButton-primary"] p { color: var(--hivis-ink) !important; font-weight: 700; }
+[data-testid="stBaseButton-secondary"] { border-radius: 8px; border-color: #c9cdc6; }
+[data-testid="stBaseButton-secondary"]:hover { border-color: var(--ink); color: var(--ink); }
+:focus-visible { outline: 3px solid var(--ink) !important; outline-offset: 2px; }
+
+/* status pills */
+.cp-pill { display: inline-block; padding: .12rem .6rem; border-radius: 999px; font-size: .8rem; font-weight: 700;
+  color: #fff; white-space: nowrap; }
+.cp-captured, .cp-still_blocked { background: var(--red); }
+.cp-reviewed { background: var(--orange); }
+.cp-reported { background: var(--amber); }
+.cp-resolved { background: var(--green); }
+.cp-dismissed { background: var(--gray); }
+.cp-row-id { font-weight: 700; font-variant-numeric: tabular-nums; }
+.cp-row-sub { color: var(--ink-2); font-size: .85rem; }
+
+/* numbered steps on a report */
+.cp-step { display: flex; align-items: center; gap: .6rem; margin: 1.6rem 0 .6rem; font-size: 1.15rem; font-weight: 700; }
+.cp-step .n { width: 1.7rem; height: 1.7rem; border-radius: 50%; background: var(--ink); color: var(--hivis);
+  display: grid; place-items: center; font-size: .9rem; font-variant-numeric: tabular-nums; }
+.cp-step.done .n { background: var(--green); color: #fff; }
+[data-testid="stMetric"] { background: var(--panel); border-radius: 10px; padding: .6rem .8rem; }
+[data-testid="stMetricValue"] { font-variant-numeric: tabular-nums; }
+[data-testid="stImage"] img { border-radius: 8px; }
+</style>
+"""
+# markdown ends an HTML block at a blank line, so the style sheet must have none
+st.markdown("\n".join(line for line in STYLE.splitlines() if line.strip()), unsafe_allow_html=True)
+
+
+def band(subtitle: str):
+    st.markdown(f'<div class="cp-band"><div class="in"><b>ClearPath</b><span>{subtitle}</span></div><i></i></div>',
+                unsafe_allow_html=True)
+
+
+def pill(status: str) -> str:
+    return f'<span class="cp-pill cp-{status}">{STATUS_LABELS[status]}</span>'
+
+
+def step(n: int, title: str, done: bool = False):
+    st.markdown(f'<div class="cp-step{" done" if done else ""}"><span class="n">{"✓" if done else n}</span>{title}</div>',
+                unsafe_allow_html=True)
+
+
+def ago(iso: str) -> str:
+    from datetime import datetime, timezone
+    try:
+        mins = int((datetime.now(timezone.utc) - datetime.fromisoformat(iso)).total_seconds() // 60)
+    except ValueError:
+        return ""
+    return "just now" if mins < 1 else f"{mins} min ago" if mins < 60 else f"{mins // 60} h ago" if mins < 1440 else f"{mins // 1440} d ago"
 
 VERDICT_STYLE = {
     "obstructed": ":red-background[**Obstructed**]",
@@ -105,7 +204,13 @@ def show_damage(comp: dict):
     if not dmg:
         return
     if dmg.get("available") is False:
-        if dmg.get("aerial"):
+        if dmg.get("street"):
+            st.markdown("**Damage analysis** · street photo, no matching before photo")
+            st.caption(dmg["reason"])
+            if dmg.get("suggestions"):
+                st.caption("Looks like: " + " · ".join(f"{x['type']} ({x['score']:.0%})" for x in dmg["suggestions"]
+                                                       if x["type"] != "None"))
+        elif dmg.get("aerial"):
             shift = comp["details"].get("aerial_shift") or {}
             up = [(k, v) for k, v in shift.items() if v > 0.05]
             st.markdown("**Damage analysis** · aerial before/after pair")
@@ -184,7 +289,8 @@ def show_observation(obs: dict | None):
 
 # ---------------------------------------------------------------- pages
 def page_locations():
-    st.header("Locations")
+    band("Before-storm photos · the routes this neighborhood depends on")
+    st.header("Before-storm photos")
     st.write("Each location is a neighborhood route people need after a storm: the sidewalk to the bus stop, a curb ramp, "
              "the walkway to the shelter. It needs one photo taken **before the storm**, while it's clear. Every "
              "after-storm photo there is compared against it, so take it from a spot you can find again (a hydrant, "
@@ -335,6 +441,7 @@ def page_review():
     elif "inspection" in st.query_params:
         del st.query_params["inspection"]
     if not iid:
+        band("Reviewer · confirm, report, and close storm damage")
         st.header("Review queue")
         items = store.inspections()
         if items:
@@ -346,19 +453,26 @@ def page_review():
         for title, statuses in QUEUE:
             group = [i for i in items if i["status"] in statuses]
             st.subheader(f"{title} ({len(group)})")
+            if not group:
+                st.caption("Nothing here.")
             for i in group:
-                c1, c2, c3, c4 = st.columns([1.2, 2.5, 2.5, 1])
-                c1.write(f"**{i['id']}**")
-                c2.write(i["location_name"])
-                c3.write(STATUS_LABELS[i["status"]])
-                c4.button("Open", key=f"open_{i['id']}", on_click=_open, args=(i["id"],))
+                with st.container(border=True):
+                    c1, c2, c3, c4 = st.columns([1.1, 3, 1.9, .8], vertical_alignment="center")
+                    c1.markdown(f'<div class="cp-row-id">{i["id"]}</div><div class="cp-row-sub">{ago(i["updated_at"])}</div>',
+                                unsafe_allow_html=True)
+                    c2.markdown(f'{i["location_name"]}<div class="cp-row-sub">{_queue_hint(i["id"])}</div>',
+                                unsafe_allow_html=True)
+                    c3.markdown(pill(i["status"]), unsafe_allow_html=True)
+                    c4.button("Open", key=f"open_{i['id']}", on_click=_open, args=(i["id"],),
+                              type="primary" if i["status"] == "captured" else "secondary")
         return
 
     b = store.bundle(iid)
     ins, loc = b["inspection"], b["location"]
     top = st.columns([4, 1])
-    top[0].header(f"{iid} · {loc['name']}")
-    top[0].caption(STATUS_LABELS[ins["status"]])
+    top[0].markdown(f'<div class="cp-row-sub">{iid} · reported {ago(ins["created_at"])}</div>', unsafe_allow_html=True)
+    top[0].header(loc["name"])
+    top[0].markdown(pill(ins["status"]), unsafe_allow_html=True)
     if top[1].button("Back to queue"):
         st.session_state.pop("iid")
         st.query_params.pop("inspection", None)  # otherwise the ?inspection= link reopens it on rerun
@@ -368,7 +482,7 @@ def page_review():
         st.info(f"**Resident wrote:** {resident[-1]}")
 
     # 1. initial capture
-    st.subheader("1. After-storm photo")
+    step(1, "After-storm photo", done=bool(b["initial"]))
     if not b["initial"]:
         img = photo_input(f"{iid}_initial", b["reference_path"], "initial")
         if img and st.button("Check this photo", type="primary"):
@@ -394,7 +508,7 @@ def page_review():
             st.caption("Draft from the photo alone. It updates when you confirm the details below.")
 
     # 2. human review
-    st.subheader("2. Review")
+    step(2, "Review", done=bool((b["review"] or {}).get("confirmed")))
     if ins["status"] == "dismissed":
         st.write("Dismissed: no storm damage blocking the route.")
         return
@@ -438,7 +552,7 @@ def page_review():
         return
 
     # 3. report
-    st.subheader("3. Report")
+    step(3, "Report", done=ins["status"] in ("reported", "resolved", "still_blocked"))
     vch = channels.verified()
     channel = None
     if vch:
@@ -472,7 +586,7 @@ def page_review():
         return
 
     # 4. follow-up
-    st.subheader("4. After cleanup")
+    step(4, "After cleanup", done=ins["status"] == "resolved")
     st.write("Come back after the crew has been and take a photo from the same spot. It's compared with the **same** before-storm photo.")
     if not b["follow_up"] or st.session_state.get(f"retake_{iid}"):
         img = photo_input(f"{iid}_follow", b["reference_path"], "follow_up")
@@ -503,6 +617,18 @@ def neighborhood_map(locs: list[dict] | None = None, height: int = 460):
     st.iframe(mapview.leaflet_html(data, height), height=height + 8)  # contents are escaped in mapview
 
 
+def _queue_hint(iid: str) -> str:
+    """One line under the spot name: the damage type if known, else the resident's note."""
+    import html
+    b = store.bundle(iid)
+    review = b.get("review") or {}
+    dmg = ((b.get("initial") or {}).get("comparison") or {}).get("details", {}).get("damage", {})
+    note = next((e["note"][len(RESIDENT_NOTE):] for e in b["events"] if (e["note"] or "").startswith(RESIDENT_NOTE)), "")
+    text = review.get("obstruction_type") or (f"Looks like: {dmg['likely_type']}" if dmg.get("likely_type") else "") \
+        or (f"“{note[:70]}”" if note else "")
+    return html.escape(text)
+
+
 def _open(iid: str):
     st.session_state.iid = iid
 
@@ -516,8 +642,8 @@ PAGES = {
 resident_only = st.query_params.get("page") == "report"  # the link residents get; not a login, just a simpler view
 
 with st.sidebar:
-    st.title("ClearPath")
-    st.caption("After a hurricane: report storm damage blocking neighborhood streets, sidewalks and walkways, and confirm it gets cleared.")
+    st.markdown('<div class="cp-side-brand"><div class="mark"></div><b>ClearPath</b></div>', unsafe_allow_html=True)
+    st.caption("After a hurricane: storm damage on neighborhood streets, sidewalks and walkways, reported and cleared.")
     if resident_only:
         page = "Report damage"
     else:
@@ -525,13 +651,14 @@ with st.sidebar:
                         label_visibility="collapsed")
         st.divider()
         method = vision_ready()
-        st.caption(f"Photo comparison: **{'DINOv2' if method == 'dinov2' else 'OpenCV baseline'}**")
-        st.caption(f"AI observations: **{'Gemini ' + config.GEMINI_MODEL if gemini.available() else 'off (no API key)'}**")
-        st.caption(f"Verified reporting channels: **{len(channels.verified())}**")
-        st.caption(f"Damage analysis: **{'CLIP + SegFormer' if vision.ml.enabled() else 'off'}**")
-        st.caption(f"Residents' website: [{RESIDENT_SITE}]({RESIDENT_SITE})")
         n_new = sum(i["status"] == "captured" for i in store.inspections())
-        if n_new:
-            st.caption(f"Reports waiting for review: **{n_new}**")
+        rows = [("Waiting for review", str(n_new), n_new > 0),
+                ("Photo comparison", "DINOv2" if method == "dinov2" else "OpenCV", True),
+                ("Damage analysis", "CLIP + SegFormer" if vision.ml.enabled() else "off", vision.ml.enabled()),
+                ("Gemini", config.GEMINI_MODEL if gemini.available() else "off: add a key to .env", gemini.available()),
+                ("Verified channels", str(len(channels.verified())), bool(channels.verified()))]
+        st.markdown("".join(f'<div class="cp-stat"><span>{k}</span><span class="{"on" if on else ""}">{v}</span></div>'
+                            for k, v, on in rows), unsafe_allow_html=True)
+        st.caption(f"Residents' website: [{RESIDENT_SITE}]({RESIDENT_SITE})")
 
 PAGES[page][1]()

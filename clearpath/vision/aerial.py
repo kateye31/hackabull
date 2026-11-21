@@ -64,9 +64,9 @@ def _remoteclip():
 
 def scene_scores(path: Path | str) -> dict:
     """{label: probability} for one aerial image. Use only as half of a before/after shift."""
-    import torch
     from PIL import Image
     model, preprocess, tf = _remoteclip()
+    import torch
     with torch.no_grad():
         f = model.encode_image(preprocess(Image.open(path).convert("RGB")).unsqueeze(0))
         f = f / f.norm(dim=-1, keepdim=True)
@@ -77,7 +77,7 @@ def scene_scores(path: Path | str) -> dict:
 def compare_aerial(before: Path | str, after: Path | str, overlay: Path | str) -> dict:
     """Change between two top-down images of the same spot."""
     from . import compare
-    r = compare(before, after, overlay)
+    r = compare(before, after, overlay, aerial=True)
     out = {"verdict": r.verdict, "changed_fraction": r.changed_fraction, "largest_region": r.largest_region,
            "method": r.method, "aligned": r.aligned, "overlay_path": str(r.overlay_path), "shift": None}
     try:

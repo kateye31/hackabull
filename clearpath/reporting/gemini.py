@@ -33,7 +33,7 @@ COMMON_RULES = """
   "Downed power line" as obstruction_type and say so in the first observation.
 - Set path_blocked to true only if a hazard visibly occupies, narrows or damages
   a road, sidewalk, driveway apron or other public right-of-way. If nothing can
-  be established, set it to false and obstruction_type to "None".
+  be established, set it to false. Report flooded houses and damaged cars even when access remains open. Use "None" only when no hazard is visible.
 - If the images don't clearly show the same place, or the area is hidden
   (clouds, shadow, tree canopy, blur), say what cannot be judged, set confidence
   to "low", and suggest getting a clearer image. Lack of evidence is inconclusive.
@@ -135,6 +135,12 @@ def build_prompt(reference_path: Path | str, comparison: dict | None = None, ima
         context = (f"An automatic image comparison flagged about {comparison['changed_fraction']:.0%} of the "
                    f"scene as changed (verdict: {comparison['verdict']}). Treat this as a weak hint, not a fact.")
     types = ", ".join(OBSTRUCTION_TYPES)
+    if imagery and imagery.get("mixed_views"):
+        prompt = ("Image 1 is overhead location context. Image 2 is the resident photo. "
+                  "Look for matching buildings, streets and driveways. State whether the location "
+                  "can be corroborated. Describe visible damage in image 2. A different viewpoint "
+                  "alone cannot establish a change over time. " + COMMON_RULES)
+        return "mixed", prompt.format(types=types)
     if imagery:
         return "aerial", AERIAL_PROMPT.format(before=_describe(imagery.get("before")),
                                               after=_describe(imagery.get("after")), context=context, types=types)
