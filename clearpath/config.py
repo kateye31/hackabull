@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-DATA = Path(os.environ.get("CLEARPATH_DATA", ROOT / "data"))
+DATA = Path(os.environ.get("CLEARPATH_DATA", ROOT / "data")).resolve()
 DB_PATH = DATA / "clearpath.db"
 CAPTURES = DATA / "captures"
 REFERENCES = DATA / "references"
