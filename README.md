@@ -64,6 +64,21 @@ On this synthetic set, DINOv2 flagged 2 of 10 shadowed clear paths and OpenCV fl
 
 ### Real campus evaluation
 
+The first campus pilot used 11 pairs from an outdoor walkway and two indoor hallways. The outdoor walkway and first hallway provided eight development pairs. The second hallway was held out with three pairs. An edge placement counted as obstructed when the backpack occupied some of the walking surface.
+
+| Split | Method | Exact verdict matches | Obstructions flagged | Clear captures flagged as obstructed | Uncertain | CPU time per pair |
+| --- | --- | --- | --- | --- | --- | --- |
+| Development | OpenCV | 5 of 8 | 2 of 5 | 0 of 3 | 3 of 8 | 0.44 s |
+| Development | DINOv2-small | 7 of 8 | 5 of 5 | 0 of 3 | 1 of 8 | 0.61 s |
+| Held-out hallway | OpenCV | 3 of 3 | 2 of 2 | 0 of 1 | 0 of 3 | 1.00 s |
+| Held-out hallway | DINOv2-small | 3 of 3 | 2 of 2 | 0 of 1 | 0 of 3 | 1.19 s |
+
+These counts describe verdicts. In the held-out hallway, alignment failed on the centered-backpack capture and the DINOv2 overlay highlighted much of the scene. A separate close-up with a backpack near the lens triggered both methods, while a blocked photo taken from farther back also produced a broad change alert. These two framing checks were outside the scored set. Both actual removal follow-ups in the scored set were called clear by both methods.
+
+The shipped thresholds were kept. Lowering the OpenCV obstruction cutoff from 5% to 3.5% improved development recall, left the held-out results unchanged, and increased synthetic false alerts from 6 to 8 of 20 clear pairs. The pilot used a single object type and has no labeled shadow trials.
+
+To extend the benchmark:
+
 Collect 15–30 reference/capture pairs at a few campus locations. Include clear, blocked, cleared follow-up, and shadowed clear captures. Take each reference with the path clear. Reuse that reference for the corresponding captures. Save each pair under `data/eval/real/<pair_id>/` as `reference.jpg` and `capture.jpg`.
 
 Create `data/eval/real/labels.csv` with columns `pair_id,label,hard_case`. Use `clear` or `obstructed` for `label` and enter `shadow` in `hard_case` for shadow trials. Keep photos in the ignored `data/` directory.
