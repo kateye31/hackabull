@@ -119,7 +119,9 @@ def report_status(report_id: str):
     if not b:
         raise HTTPException(404, "No report with that number.")
     ins = b["inspection"]
-    processing = not (b["initial"] and b["initial"].get("comparison"))
+    failed = any((e["note"] or "").startswith("Automatic check failed") for e in b["events"])
+    # still working until the photo is compared AND the plan (with nearby help) exists
+    processing = not failed and not (b["initial"] and b["initial"].get("comparison") and b.get("plan"))
     help_ = []
     near = (b.get("plan") or {}).get("nearby", {})
     for cat in PUBLIC_HELP:
