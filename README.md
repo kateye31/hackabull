@@ -3,11 +3,11 @@
 Document a blocked campus walkway, get it to the right office, and confirm it got fixed.
 
 1. **Capture.** Take a photo of the blocked path with a webcam or phone.
-2. **Compare.** The photo is compared against a *clear-path reference* photo of the same spot (DINOv2, with an OpenCV baseline), and the changed area is highlighted.
+2. **Compare.** For a satellite location, use the overhead image as the before reference and upload a ground-level photo as the after image. For similar-view image pairs, DINOv2 or OpenCV can highlight changes.
 3. **Describe.** Gemini drafts observations: what's blocking it, the accessibility impact, and a suggested action.
 4. **Review.** A person checks the photos and confirms or edits the details. Nothing goes out unconfirmed.
 5. **Report.** An editable report, plus a printable HTML export, goes to a **verified** campus reporting channel.
-6. **Follow up.** A later photo is compared against the **same** reference, and the reviewer marks it resolved or still blocked.
+6. **Follow up.** Submit a later photo of the same spot. The reviewer marks the obstruction resolved or still blocked.
 
 ## Quick start
 

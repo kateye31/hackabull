@@ -56,9 +56,14 @@ python -m clearpath.satellite --name "Bayshore & Howard" --lat 27.9301 --lon -82
   ```
   It prints the structured JSON and saves `gemini_boxes.jpg` with the boxes Gemini drew. Without a
   key, it prints the exact prompt it would send.
-- The mode is chosen automatically. Locations made by `clearpath.satellite` use the **aerial**
-  prompt, which is told about the image sources and dates and told to ignore colour and shadow
-  differences. Webcam photos use the **ground** prompt.
+- For an existing satellite location, open **Inspect**, select the location, then choose
+  **Upload** or **Camera** and submit a ground-level photo of the obstruction. The satellite
+  image is the before reference. Gemini uses the ground photo to identify visible hazards
+  and the satellite view for location context. The reviewer sees both images and any Gemini
+  markings on the submitted photo.
+- Add `--reference-only` to the satellite setup command to register a site without fetching
+  a post-storm aerial image. A prepared **Demo photo** uses aerial-to-aerial comparison.
+  Locations with a ground-level reference use ground-to-ground comparison.
 - Output fields: `path_blocked`, `obstruction_type` (from `OBSTRUCTION_TYPES`), `observations`,
   `accessibility_impact`, `suggested_action`, `confidence`, and `regions` (0–1 boxes).
 - Tuning: run it on every site, compare the output with what you can see, and edit

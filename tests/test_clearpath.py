@@ -4,6 +4,7 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 _TMP = Path(tempfile.mkdtemp(prefix="clearpath-test-"))
 os.environ["CLEARPATH_DATA"] = str(_TMP)
@@ -121,12 +122,13 @@ class Satellite(unittest.TestCase):
         import json
         from clearpath import satellite
         ref, cap, d = _pair(blocked=True)
+        ref = ref.rename(d / "reference.jpg")
+        cap = cap.rename(d / "initial.jpg")
         info = {"spec": "x", "source": "esri", "layer": "1", "label": "Esri Wayback 2024-09-19",
                 "captured": "2023-02-26", "detail": "", "attribution": "", "lat": 27.9, "lon": -82.4, "zoom": 19}
         meta = {"name": "Street", "lat": 27.92650, "lon": -82.45550, "zoom": 19,
                 "images": {ref.name: info, "initial.jpg": {**info, "source": "noaa", "label": "NOAA NGS 20241014a-rgb",
                                                            "captured": "2024-10-14"}}}
-        meta["images"]["reference.jpg"] = meta["images"].pop(ref.name)
         (d / "site.json").write_text(json.dumps(meta))
         return ref, cap, satellite
 
@@ -137,7 +139,7 @@ class Satellite(unittest.TestCase):
 
     def test_prompt_switches_to_aerial(self):
         ref, cap, _ = self._site()
-        mode, prompt = gemini.build_prompt(ref)
+        mode, prompt = gemini.build_prompt(ref, capture_path=cap)
         self.assertEqual(mode, "aerial")
         self.assertIn("NOAA NGS 20241014a-rgb", prompt)
         self.assertIn("captured 2023-02-26", prompt)
@@ -145,11 +147,13 @@ class Satellite(unittest.TestCase):
         self.assertEqual(mode, "ground")
 
     def test_report_has_coordinates_and_credits(self):
-        ref, cap, _ = self._site()
+        ref, cap, satellite = self._site()
         s = Store(_TMP / "sat.db")
         iid = s.new_inspection(s.add_location("Street", ref))
         c = s.add_capture(SavedCapture(iid, "initial", cap, now()))
-        s.save_comparison(c.capture_id, vision.compare(ref, cap, cap.with_name("o.png"), method="opencv"))
+        comparison = vision.compare(ref, cap, cap.with_name("o.png"), method="opencv")
+        comparison.details["imagery"] = satellite.imagery_for(ref, cap)
+        s.save_comparison(c.capture_id, comparison)
         s.save_review(iid, ReviewedDetails("Storm debris pile", "Partly blocked: passable with difficulty",
                                            "Debris at the curb.", "", "Sam", True, now()))
         out = report.build(s.bundle(iid))
@@ -157,6 +161,37 @@ class Satellite(unittest.TestCase):
         self.assertIn("After imagery: NOAA NGS 20241014a-rgb, captured 2024-10-14", out.text)
         self.assertIn("NOAA National Geodetic Survey", out.html)
         self.assertIn("Esri World Imagery Wayback", out.html)
+
+    def test_ground_upload_uses_satellite_context_and_omits_aerial_after_credits(self):
+        from streamlit.testing.v1 import AppTest
+
+        ref, demo_after, _ = self._site()
+        store = Store()
+        iid = store.new_inspection(store.add_location("Satellite upload test", ref))
+        at = AppTest.from_file(str(config.ROOT / "app.py"))
+        at.query_params["inspection"] = iid
+        at.run()
+        obs = {"available": True, "mode": "mixed", "model": "test", "confidence": "high",
+               "path_blocked": True, "obstruction_type": "Fallen tree or limbs",
+               "observations": ["Tree across the street."], "regions": [[0.2, 0.3, 0.6, 0.8]]}
+        at.file_uploader[0].upload("initial.jpg", demo_after.read_bytes(), "image/jpeg").run()
+        with patch.object(vision, "compare", side_effect=AssertionError("Mixed views cannot be aligned")), \
+             patch.object(gemini, "observe", return_value=obs) as observe:
+            next(b for b in at.button if b.label == "Check this photo").click().run()
+        self.assertFalse(at.exception)
+        ref_path, capture_path = observe.call_args.args
+        mode, prompt = gemini.build_prompt(ref_path, capture_path=capture_path)
+        self.assertEqual(mode, "mixed")
+        self.assertNotIn("NOAA", prompt)
+        bundle = store.bundle(iid)
+        self.assertIsNone(bundle["initial"]["comparison"])
+        self.assertTrue(Path(bundle["initial"]["observation"]["overlay_path"]).is_file())
+        store.save_review(iid, ReviewedDetails("Fallen tree or limbs", "Partly blocked: passable with difficulty",
+                                               "Tree across the street.", "", "Sam", True, now()))
+        out = report.build(store.bundle(iid))
+        self.assertIn("Initial ground photo", out.html)
+        self.assertNotIn("NOAA", out.html)
+        self.assertNotIn("% changed", out.text)
 
 
 class AppFlow(unittest.TestCase):

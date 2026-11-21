@@ -11,7 +11,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from clearpath import capture, config, demo, vision
+from clearpath import capture, config, demo, satellite, vision
 from clearpath.contracts import (OBSTRUCTION_TYPES, PHASE_LABELS, SEVERITIES, STATUS_LABELS,
                                  ComparisonResult, ReviewedDetails)
 from clearpath.reporting import channels, gemini, report
@@ -43,36 +43,54 @@ store = get_store()
 
 
 # ---------------------------------------------------------------- helpers
-def photo_input(key: str, reference_path: str | None = None, phase: str = "initial") -> bytes | None:
-    """Camera, upload, or (for demo locations) a prepared photo. Returns image bytes once chosen."""
+def photo_input(key: str, reference_path: str, phase: str = "initial") -> tuple[bytes, Path | None] | None:
     options = ["Camera", "Upload"]
-    demo_path = demo.demo_photo(reference_path, phase) if reference_path else None
+    demo_path = demo.demo_photo(reference_path, phase)
+    aerial = satellite.site_meta(reference_path) is not None
+    if aerial and demo_path and not satellite.imagery_for(reference_path, demo_path):
+        demo_path = None
     if demo_path:
         options.append("Demo photo")
     src = st.radio("Photo source", options, horizontal=True, key=f"{key}_src",
-                   index=len(options) - 1 if demo_path else 0)
+                   index=1 if aerial else len(options) - 1 if demo_path else 0)
     if src == "Camera":
-        f = st.camera_input("Take a photo from where the reference was taken", key=f"{key}_cam")
-        return f.getvalue() if f else None
+        label = "Photograph the street or sidewalk at ground level" if aerial else "Take a photo from where the reference was taken"
+        f = st.camera_input(label, key=f"{key}_cam")
+        return (f.getvalue(), None) if f else None
     if src == "Upload":
         f = st.file_uploader("Upload a photo", type=["jpg", "jpeg", "png", "webp"], key=f"{key}_up")
-        return f.getvalue() if f else None
+        return (f.getvalue(), None) if f else None
     st.image(str(demo_path), caption="Demo photo", width=320)
-    return demo_path.read_bytes()
+    return demo_path.read_bytes(), demo_path
 
 
-def process_capture(inspection_id: str, phase: str, image_bytes: bytes, reference_path: str):
+def process_capture(inspection_id: str, phase: str, photo: tuple[bytes, Path | None], reference_path: str):
     """Person 1 -> Person 2 -> Person 3 hand-offs for one photo."""
     with st.status("Checking the photo…", expanded=True) as s:
         st.write("Saving photo")
+        image_bytes, demo_path = photo
         cap = store.add_capture(capture.save_capture(image_bytes, inspection_id, phase))
-        st.write("Comparing with the clear-path reference")
         overlay = config.OVERLAYS / inspection_id / f"{phase}_{cap.capture_id}.png"
-        result: ComparisonResult = vision.compare(reference_path, cap.image_path, overlay)
-        store.save_comparison(cap.capture_id, result)
-        if phase == "initial":
+        before = satellite.imagery_for(reference_path, reference_path)
+        after = satellite.imagery_for(reference_path, demo_path) if demo_path else None
+        mixed = satellite.site_meta(reference_path) is not None and after is None
+        if mixed:
+            st.write("Reviewing the ground photo with the satellite reference")
+            obs = gemini.observe(reference_path, cap.image_path)
+            obs["mode"] = "mixed"
+            if gemini.draw_regions(cap.image_path, obs.get("regions", []), overlay):
+                obs["overlay_path"] = str(overlay)
+            store.save_observation(cap.capture_id, obs)
+        else:
+            st.write("Comparing with the clear-path reference")
+            result: ComparisonResult = vision.compare(reference_path, cap.image_path, overlay)
+            if after:
+                result.details["imagery"] = after
+            store.save_comparison(cap.capture_id, result)
+        if phase == "initial" and not mixed:
             st.write("Asking Gemini what it sees")
-            obs = gemini.observe(reference_path, cap.image_path, result.to_dict())
+            imagery = {"before": before, "after": after} if after else None
+            obs = gemini.observe(reference_path, cap.image_path, result.to_dict(), imagery=imagery)
             store.save_observation(cap.capture_id, obs)
         s.update(label="Photo checked", state="complete")
 
@@ -80,6 +98,18 @@ def process_capture(inspection_id: str, phase: str, image_bytes: bytes, referenc
 def show_comparison(bundle: dict, phase: str):
     cap = bundle[phase]
     comp = cap["comparison"]
+    obs = cap.get("observation") or {}
+    if obs.get("mode") == "mixed":
+        overlay = obs.get("overlay_path")
+        columns = st.columns(3 if overlay else 2)
+        columns[0].image(bundle["reference_path"], caption="Before: satellite reference", width="stretch")
+        columns[1].image(cap["image_path"], caption=f"{PHASE_LABELS[phase]} ground photo", width="stretch")
+        if overlay:
+            columns[2].image(overlay, caption="Possible obstruction marked by Gemini", width="stretch")
+        st.caption("The satellite image provides location context. Review the ground photo to confirm the obstruction.")
+        if phase == "follow_up":
+            show_observation(obs)
+        return
     c1, c2, c3 = st.columns(3)
     c1.image(bundle["reference_path"], caption="Clear-path reference", width="stretch")
     c2.image(cap["image_path"], caption=f"{PHASE_LABELS[phase]} photo", width="stretch")
@@ -105,7 +135,7 @@ def show_observation(obs: dict | None):
         st.info(f"No AI observations: {obs.get('reason')}")
         return
     st.markdown(f"**AI observations** · {obs['model']} · confidence {obs['confidence']} · *draft for the reviewer*")
-    st.write(f"Obstruction: **{obs['obstruction_type']}**" + ("" if obs["path_blocked"] else " (Gemini thinks the path is clear)"))
+    st.write(f"Obstruction: **{obs['obstruction_type']}**" + ("" if obs["path_blocked"] else " (no visible obstruction identified)"))
     for o in obs["observations"]:
         st.write(f"- {o}")
     if obs.get("accessibility_impact"):
@@ -162,7 +192,10 @@ def page_inspect():
         names = {l["name"]: l["id"] for l in locs}
         name = st.selectbox("Where are you?", list(names))
         loc = next(l for l in locs if l["id"] == names[name])
-        st.image(loc["reference_path"], caption="Clear-path reference: stand roughly here", width=420)
+        aerial = satellite.site_meta(loc["reference_path"])
+        st.image(loc["reference_path"], caption="Before: satellite reference" if aerial else "Clear-path reference: stand roughly here", width=420)
+        if aerial:
+            st.caption("Choose this location, then upload a ground-level photo showing the situation.")
         if st.button("Start inspection", type="primary"):
             st.session_state.iid = store.new_inspection(names[name])
             st.rerun()
@@ -259,7 +292,7 @@ def page_inspect():
 
     # 4. follow-up
     st.subheader("4. Follow-up")
-    st.write("Come back later and take a photo from the same spot. It's compared with the **same** clear-path reference.")
+    st.write("Come back later and take a photo of the same stretch of road or sidewalk.")
     if not b["follow_up"] or st.session_state.get(f"retake_{iid}"):
         img = photo_input(f"{iid}_follow", b["reference_path"], "follow_up")
         if img and st.button("Check follow-up photo", type="primary"):
