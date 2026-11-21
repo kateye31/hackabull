@@ -1,8 +1,13 @@
-# Reviewer app theme: the residents' site's hi-vis family, held back for a working screen.
+# Reviewer theme shares the residents' charcoal and high-visibility green.
 [theme]
 base = "light"
-primaryColor = "#3f4d00"            # dark olive from the hi-vis family; white button text stays 9:1
-backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f3f4f1"
-textColor = "#16181a"
+primaryColor = "#4a5900"
+backgroundColor = "#f9faf5"
+secondaryBackgroundColor = "#eff1e8"
+textColor = "#1c2419"
 font = "sans serif"
+
+[theme.sidebar]
+backgroundColor = "#20251b"
+secondaryBackgroundColor = "#30392b"
+textColor = "#f9faf5"
