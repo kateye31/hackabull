@@ -27,7 +27,7 @@ import cv2
 import numpy as np
 
 from . import align as align_mod
-from .detect import find_new_water, read_mask, read_rgb, MIN_BLOB_M2
+from .detect import MIN_BLOB_M2, filter_water_regions, find_new_water, read_mask, read_rgb
 from .water import water_mask
 
 
@@ -64,10 +64,11 @@ def eval_scene(scene_dir: Path) -> list[tuple[str, str]]:
         sys.exit(f"{scene_dir}/labels/ needs before_water.png, after_water.png and new_water.png")
 
     after_al, valid, info = align_mod.align(before, after)
-    _, after_w, new = find_new_water(before, after_al, valid, min_px=int(MIN_BLOB_M2 / (gsd * gsd)))
+    min_px = int(MIN_BLOB_M2 / (gsd * gsd))
+    _, after_w, new = find_new_water(before, after_al, valid, min_px=min_px)
 
-    # Without the comparison, every water pixel in the after image would be flagged.
-    naive = after_w
+    # Apply the same region filtering to isolate the effect of removing existing water.
+    naive = filter_water_regions(after_w, min_px)
     w = scores(after_w & valid, lab["after_water"] & valid)
     n = scores(new, lab["new_water"] & valid)
     bodies = lab["before_water"] & valid

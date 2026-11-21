@@ -11,6 +11,7 @@ data/uploads/
 data/scenes/demo/
 
 # outputs detect.py writes next to real scenes (keep the inputs, regenerate these)
+data/scenes/*/detections.json
 data/scenes/*/after_aligned.png
 data/scenes/*/overlay.png
 data/scenes/*/crops/

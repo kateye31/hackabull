@@ -75,17 +75,20 @@ class GeoFrame:
         return round(lat, 6), round(lon, 6)
 
 
+def filter_water_regions(mask: np.ndarray, min_px: int) -> np.ndarray:
+    opened = cv2.morphologyEx(mask.astype(np.uint8), cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    n, lab, stats, _ = cv2.connectedComponentsWithStats(opened, connectivity=8)
+    keep = np.zeros(n, bool)
+    keep[1:] = stats[1:, cv2.CC_STAT_AREA] >= min_px
+    return keep[lab]
+
+
 def find_new_water(before, after_aligned, valid, bands="rgb", min_px=1):
     before_w = water_mask(before, bands)
     after_w = water_mask(after_aligned, bands) & valid
     k = 2 * BEFORE_WATER_BUFFER_PX + 1
     grown = cv2.dilate(before_w.astype(np.uint8), np.ones((k, k), np.uint8)) > 0
-    new = after_w & ~grown
-    new = cv2.morphologyEx(new.astype(np.uint8), cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
-    n, lab, stats, _ = cv2.connectedComponentsWithStats(new, connectivity=8)
-    keep = np.zeros(n, bool)
-    keep[1:] = stats[1:, cv2.CC_STAT_AREA] >= min_px
-    return before_w, after_w, keep[lab]
+    return before_w, after_w, filter_water_regions(after_w & ~grown, min_px)
 
 
 def detect(scene_dir: Path, bands: str = "rgb") -> dict:
