@@ -29,8 +29,8 @@ config.ensure_dirs()
 STYLE = """
 <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
 <style>
-:root { --hivis:#d4f000; --hivis-ink:#1b1d0e; --reflect:#c9ced3; --ink:#16181a; --ink-2:#55595e;
-        --line:#dfe2db; --panel:#f5f6f2; --red:#b3261e; --orange:#c25e00; --amber:#9a7400; --green:#2e7d32; --gray:#6b7177; }
+:root { --hivis:#d4f000; --hivis-ink:#1b1d0e; --reflect:#c9ced3; --ink:#1c2419; --ink-2:#4c5549;
+        --line:#dce1d4; --panel:#eff1e8; --red:#b3261e; --orange:#c25e00; --amber:#9a7400; --green:#2e7d32; --gray:#6b7177; }
 html, body, .stMarkdown, p, label, h1, h2, h3, h4, input, textarea, [data-testid="stMetricValue"], [data-testid="stMetricLabel"],
 [data-testid="stBaseButton-primary"] p, [data-testid="stBaseButton-secondary"] p { font-family: "Atkinson Hyperlegible", system-ui, sans-serif; }
 ::selection { background: var(--hivis); color: var(--hivis-ink); }
@@ -42,16 +42,15 @@ h2 { font-size: 1.3rem !important; }
 h3 { font-size: 1.1rem !important; color: var(--ink); }
 
 /* brand band: the vest, with its two retroreflective stripes */
-.cp-band { background: var(--hivis); color: var(--hivis-ink); border-radius: 12px; overflow: hidden; margin: 0 0 1.25rem; }
-.cp-band .in { display: flex; align-items: baseline; gap: .75rem; padding: .7rem 1.1rem .55rem; flex-wrap: wrap; }
-.cp-band b { font-size: 1.2rem; letter-spacing: .01em; }
+.cp-band { background: #20251b; color: #fafcf2; border-radius: 12px; overflow: hidden; margin: 0 0 1.25rem; }
+.cp-band .in { display: flex; align-items: baseline; gap: .75rem; padding: 1rem 1.1rem .9rem; flex-wrap: wrap; }
+.cp-band b { color: var(--hivis); font-size: 1.2rem; letter-spacing: .01em; }
 .cp-band span { font-size: .95rem; opacity: .85; }
-.cp-band i { display: block; height: 14px; background:
-  linear-gradient(var(--reflect), var(--reflect)) 0 2px / 100% 4px no-repeat,
-  linear-gradient(var(--reflect), var(--reflect)) 0 8px / 100% 4px no-repeat, var(--hivis); }
+.cp-band i { display: block; height: 9px; background:
+  linear-gradient(to bottom, var(--hivis) 0 3px, #20251b 3px 5px, var(--reflect) 5px 7px, #20251b 7px); }
 
 /* sidebar: charcoal, like the vest's trim */
-[data-testid="stSidebar"] { background: #16181a; }
+[data-testid="stSidebar"] { background: #20251b; }
 [data-testid="stSidebar"] * { color: #e7eaec; }
 [data-testid="stSidebar"] .stCaption, [data-testid="stSidebar"] small { color: #aab1b7 !important; }
 [data-testid="stSidebar"] a { color: var(--hivis) !important; }
@@ -76,6 +75,7 @@ h3 { font-size: 1.1rem !important; color: var(--ink); }
 [data-testid="stBaseButton-secondary"] { border-radius: 8px; border-color: #c9cdc6; }
 [data-testid="stBaseButton-secondary"]:hover { border-color: var(--ink); color: var(--ink); }
 :focus-visible { outline: 3px solid var(--ink) !important; outline-offset: 2px; }
+[data-testid="stSidebar"] :focus-visible { outline-color: var(--hivis) !important; }
 
 /* status pills */
 .cp-pill { display: inline-block; padding: .12rem .6rem; border-radius: 999px; font-size: .8rem; font-weight: 700;

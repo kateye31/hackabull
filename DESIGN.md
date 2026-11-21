@@ -4,7 +4,7 @@ Written from the built residents' page (`web/index.html`) and the reviewer theme
 
 ## World
 
-A high-visibility safety vest: the most legible thing on a street after a storm. Fluorescent yellow-green carries the band and the one primary action; silver retroreflective stripes are the signature; everything else is calm charcoal on white (or near-black in dark mode).
+A high-visibility safety vest: the most legible thing on a street after a storm. A charcoal masthead frames a fluorescent yellow-green wordmark, reflective edge, and primary action. The photo and location sit side by side on desktop and stack on narrow screens.
 
 ## Tokens (residents' page, `:root`)
 
@@ -15,9 +15,9 @@ A high-visibility safety vest: the most legible thing on a street after a storm.
 | `--reflect` | `#c9ced3` | `#8d949a` | the two reflective stripes |
 | `--hazard` | `#b3261e` | `#ffb4a9` | downed-power-line notice only |
 | `--ink` / `--ink-2` | `#16181a` / `#464c52` | `#f1f3f4` / `#b6bdc3` | text / secondary text (≥8.6:1) |
-| `--ground` / `--panel` | `#ffffff` / `#f3f4f1` | `#121416` / `#1d2023` | page / inputs, photo well |
+| `--ground` / `--panel` | `#f9faf5` / `#eff1e8` | `#121416` / `#1d2023` | page / inputs, photo well |
 
-Type: Atkinson Hyperlegible (Braille Institute's legibility face), system sans fallback. Radius 10px. Tap targets ≥48px; the send button 60px.
+Type: Atkinson Hyperlegible (Braille Institute's legibility face), system sans fallback. Radius 12px. Tap targets ≥48px; the send button 60px.
 
 ## Signature
 
@@ -27,4 +27,4 @@ The retroreflective band under the header (two silver stripes), echoed as the st
 
 - Hi-vis only on the band and the one primary action. Hazard red only for the power-line notice and errors.
 - The 911 notice is always visible above the form.
-- Reviewer app (Streamlit): same family, restrained: dark olive `#3f4d00` primary, white ground, `#f3f4f1` panels.
+- Reviewer app (Streamlit): same family, restrained: dark olive `#4a5900` primary, white ground, `#eff1e8` panels.
