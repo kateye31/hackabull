@@ -118,15 +118,20 @@ def canopy_fraction(image_path: Path | str, radius_frac: float = 0.5) -> float:
     """Share of the area around the centre that looks like tree canopy.
 
     Excess-green index on chromatic coordinates: ExG = 2g − r − b, with r = R/(R+G+B) etc.
-    Vegetation has ExG > 0.05; pavement, roofs and water sit near or below 0.
+    Vegetation has ExG > 0.05; pavement and roofs sit near or below 0.
     Dark green (canopy) is separated from bright lawn by brightness < 0.45.
+    Green water also passes both tests, so canopy must be textured too: local standard
+    deviation of brightness (9x9 window) ≥ 0.035. Water is smooth; tree crowns are not.
     """
+    import cv2
     rgb = np.asarray(Image.open(image_path).convert("RGB"), np.float32) / 255.0
     total = rgb.sum(-1) + 1e-6
     r, g, b = (rgb[..., i] / total for i in range(3))
     exg = 2 * g - r - b
     bright = rgb.mean(-1)
-    canopy = (exg > 0.05) & (bright < 0.45)
+    mean = cv2.blur(bright, (9, 9))
+    texture = np.sqrt(np.maximum(cv2.blur(bright * bright, (9, 9)) - mean * mean, 0))
+    canopy = (exg > 0.05) & (bright < 0.45) & (texture >= 0.035)
     h, w = canopy.shape
     yy, xx = np.ogrid[:h, :w]
     inside = (yy - h / 2) ** 2 + (xx - w / 2) ** 2 <= (radius_frac * min(h, w)) ** 2

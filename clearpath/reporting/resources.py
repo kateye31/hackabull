@@ -47,13 +47,17 @@ CATEGORIES = {
     "fuel": ("Fuel (generators)", [("amenity", {"fuel"})]),
 }
 NEEDS = {
-    "Fallen tree or large branches": ["tree_service", "hardware", "builder"],
+    "Fallen tree or limbs": ["tree_service", "hardware", "builder"],
     "Storm debris pile": ["waste", "hardware", "builder"],
     "Flooding or standing water": ["plumber", "hardware", "shelter"],
     "Downed power line": ["fire", "electrician"],
     "Fallen sign, pole or fence": ["builder", "hardware"],
-    "Displaced bin, vehicle or boat": ["towing", "builder"],
-    "Damaged or washed-out pavement": ["builder"],
+    "Vehicle, boat or object in right-of-way": ["towing", "builder"],
+    "Damaged road or sidewalk": ["builder"],
+    "Sand or sediment on road": ["builder", "waste"],
+    "Illegal dumping or bulk trash": ["waste"],
+    "Construction or barrier": ["builder"],
+    "Damaged roof or structure": ["builder", "hardware"],
     "Other": ["hardware", "builder"],
 }
 ALWAYS = ["hospital", "shelter"]

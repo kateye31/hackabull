@@ -26,27 +26,36 @@ import cv2
 import numpy as np
 
 from .. import config
+from ..contracts import IMPASSABLE, MINOR, PARTLY
 
 # plain-language prompts for CLIP, keyed by our damage types (contracts.OBSTRUCTION_TYPES)
 DAMAGE_PROMPTS = {
-    "Fallen tree or large branches": "a photo of a fallen tree or large branches blocking a street or sidewalk",
+    "Fallen tree or limbs": "a photo of a fallen tree or large branches blocking a street or sidewalk",
     "Storm debris pile": "a photo of a pile of storm debris, boards and trash on a street",
     "Flooding or standing water": "a photo of a flooded street with standing water",
     "Downed power line": "a photo of downed power lines and a broken utility pole",
     "Fallen sign, pole or fence": "a photo of a fallen sign or fence on a sidewalk",
-    "Displaced bin, vehicle or boat": "a photo of a car, boat or trash bin pushed into the street by a storm",
-    "Damaged or washed-out pavement": "a photo of a cracked or washed-out road",
+    "Vehicle, boat or object in right-of-way": "a photo of a car, boat or trash bin pushed into the street by a storm",
+    "Damaged road or sidewalk": "a photo of a cracked or washed-out road",
+    "Sand or sediment on road": "a photo of sand or mud covering a street after a storm surge",
+    "Illegal dumping or bulk trash": "a photo of furniture, mattresses and bulk trash piled at the curb",
+    "Construction or barrier": "a photo of construction barriers or cones blocking a sidewalk",
+    "Damaged roof or structure": "a photo of a house with a damaged roof or a blue tarp",
     "None": "a photo of a clear, undamaged street",
 }
 # how much a fully covered route of this type matters (used in the damage index)
 TYPE_WEIGHT = {
     "Downed power line": 1.0,
     "Flooding or standing water": 0.9,
-    "Fallen tree or large branches": 0.8,
+    "Fallen tree or limbs": 0.8,
     "Storm debris pile": 0.7,
-    "Damaged or washed-out pavement": 0.7,
+    "Damaged road or sidewalk": 0.7,
     "Fallen sign, pole or fence": 0.5,
-    "Displaced bin, vehicle or boat": 0.5,
+    "Vehicle, boat or object in right-of-way": 0.5,
+    "Sand or sediment on road": 0.6,
+    "Illegal dumping or bulk trash": 0.5,
+    "Construction or barrier": 0.4,
+    "Damaged roof or structure": 0.3,     # beside the route rather than on it
     "Other": 0.5,
 }
 # ADE20K labels that count as surface people walk, roll or drive on
@@ -138,13 +147,13 @@ def damage_metrics(walkable: np.ndarray, changed: np.ndarray, damage_type: str |
     weight = TYPE_WEIGHT.get(damage_type or "Other", 0.5)
     DI = round(100 * B * weight, 1)
     if damage_type == "Downed power line":
-        severity = "Impassable: no way through"
+        severity = IMPASSABLE
     elif N < 0.25 or B >= 0.6:
-        severity = "Impassable: no way through"
+        severity = IMPASSABLE
     elif B >= 0.15:
-        severity = "Partly blocked: passable with care"
+        severity = PARTLY
     else:
-        severity = "Minor: narrows the route"
+        severity = MINOR
     return {"walkable_share": round(float(walk.mean()), 3), "blocked_share": round(B, 3),
             "narrowest_clear_width": round(N, 3), "damage_index": DI, "type_weight": weight,
             "suggested_severity": severity, "note": note}

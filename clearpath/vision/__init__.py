@@ -29,7 +29,8 @@ def verdict(method: str, largest_region: float) -> str:
     return "uncertain"
 
 
-def compare(reference_path, capture_path, overlay_path, method: str | None = None) -> ComparisonResult:
+def compare(reference_path, capture_path, overlay_path, method: str | None = None,
+            aerial: bool = False) -> ComparisonResult:
     """method: "dinov2", "opencv" or "auto" (DINOv2 if it loads, else OpenCV).
 
     The OpenCV baseline always runs too; its numbers go in details["opencv"] so the
@@ -76,7 +77,17 @@ def compare(reference_path, capture_path, overlay_path, method: str | None = Non
                              "verdict": verdict("dinov2", primary["largest_region"])}
     if fallback_reason:
         details["fallback"] = f"DINOv2 unavailable, used OpenCV baseline ({fallback_reason})"
-    if ml.enabled():  # damage type + walkway equations (clearpath/vision/ml.py)
+    if aerial:  # top-down pair: CLIP/SegFormer are ground-photo models, so use RemoteCLIP's shift instead
+        details["damage"] = {"available": False, "aerial": True,
+                             "reason": "Aerial before/after pair: the ground-photo models don't apply."}
+        if ml.enabled():
+            from .aerial import AerialUnavailable, scene_scores
+            try:
+                b, a = scene_scores(reference_path), scene_scores(capture_path)
+                details["aerial_shift"] = dict(sorted(((k, round(a[k] - b[k], 3)) for k in a), key=lambda kv: -kv[1]))
+            except AerialUnavailable as e:
+                details["aerial_shift_note"] = str(e)
+    elif ml.enabled():  # damage type + walkway equations (clearpath/vision/ml.py)
         try:
             details["damage"] = ml.analyse(ref, cap_al, primary["mask"], valid)
         except ml.MLUnavailable as e:

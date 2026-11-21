@@ -107,7 +107,7 @@ class Reporting(unittest.TestCase):
         iid = s.new_inspection(s.add_location("Ramp", ref))
         c = s.add_capture(SavedCapture(iid, "initial", cap, now()))
         s.save_comparison(c.capture_id, vision.compare(ref, cap, d / "o.png", method="opencv"))
-        s.save_review(iid, ReviewedDetails("Storm debris pile", "Minor: narrows the route", desc, "", "Sam", confirmed, now()))
+        s.save_review(iid, ReviewedDetails("Storm debris pile", "Minor: hazard beside the road or sidewalk", desc, "", "Sam", confirmed, now()))
         return s.bundle(iid)
 
     def test_needs_confirmed_review(self):
@@ -165,6 +165,51 @@ class RealDemoPhotos(unittest.TestCase):
         shutil.copy(ref, shoot / "reference.jpg")
         with self.assertRaises(FileNotFoundError):
             demo.add_real("Nowhere", shoot, store=Store(_TMP / "real2.db"))
+
+
+class Satellite(unittest.TestCase):
+    """Offline checks for clearpath.satellite and its use in prompts and reports."""
+
+    def _site(self):
+        import json
+        from clearpath import satellite
+        ref, cap, d = _pair(blocked=True)
+        info = {"spec": "x", "source": "esri", "layer": "1", "label": "Esri Wayback 2024-09-19",
+                "captured": "2023-02-26", "detail": "", "attribution": "", "lat": 27.9, "lon": -82.4, "zoom": 19}
+        meta = {"name": "Street", "lat": 27.92650, "lon": -82.45550, "zoom": 19,
+                "images": {ref.name: info, "initial.jpg": {**info, "source": "noaa", "label": "NOAA NGS 20241014a-rgb",
+                                                           "captured": "2024-10-14"}}}
+        meta["images"]["reference.jpg"] = meta["images"].pop(ref.name)
+        (d / "site.json").write_text(json.dumps(meta))
+        return ref, cap, satellite
+
+    def test_tile_math(self):
+        from clearpath import satellite
+        x, y = satellite._world_px(0, 0, 1)
+        self.assertEqual((x, y), (256, 256))
+
+    def test_prompt_switches_to_aerial(self):
+        ref, cap, _ = self._site()
+        mode, prompt = gemini.build_prompt(ref)
+        self.assertEqual(mode, "aerial")
+        self.assertIn("NOAA NGS 20241014a-rgb", prompt)
+        self.assertIn("captured 2023-02-26", prompt)
+        mode, _ = gemini.build_prompt(_pair(blocked=False)[0])
+        self.assertEqual(mode, "ground")
+
+    def test_report_has_coordinates_and_credits(self):
+        ref, cap, _ = self._site()
+        s = Store(_TMP / "sat.db")
+        iid = s.new_inspection(s.add_location("Street", ref))
+        c = s.add_capture(SavedCapture(iid, "initial", cap, now()))
+        s.save_comparison(c.capture_id, vision.compare(ref, cap, cap.with_name("o.png"), method="opencv"))
+        s.save_review(iid, ReviewedDetails("Storm debris pile", "Partly blocked: passable with difficulty",
+                                           "Debris at the curb.", "", "Sam", True, now()))
+        out = report.build(s.bundle(iid))
+        self.assertIn("27.92650, -82.45550", out.text)
+        self.assertIn("After imagery: NOAA NGS 20241014a-rgb, captured 2024-10-14", out.text)
+        self.assertIn("NOAA National Geodetic Survey", out.html)
+        self.assertIn("Esri World Imagery Wayback", out.html)
 
 
 class AppFlow(unittest.TestCase):
@@ -245,12 +290,18 @@ class Geo(unittest.TestCase):
     def test_canopy_index(self):
         from PIL import Image
         from clearpath import geo
+        rng = np.random.default_rng(0)
         img = np.full((100, 100, 3), (150, 150, 150), np.uint8)
-        img[:, :50] = (40, 90, 35)   # dark green canopy on the left half
+        leaves = rng.integers(-30, 30, (100, 50, 1))
+        img[:, :50] = np.clip(np.array([40, 90, 35]) + leaves, 0, 255)   # textured dark green canopy, left half
         f = _TMP / "canopy.png"
         Image.fromarray(img).save(f)
         self.assertAlmostEqual(geo.canopy_fraction(f, radius_frac=0.5), 0.5, delta=0.05)
         self.assertEqual(geo.tree_risk(0.5), "high")
+        water = np.full((100, 100, 3), (40, 95, 80), np.uint8)   # smooth green water is not canopy
+        f2 = _TMP / "water.png"
+        Image.fromarray(water).save(f2)
+        self.assertLess(geo.canopy_fraction(f2), 0.02)
 
 
 class DamageEquations(unittest.TestCase):
@@ -270,10 +321,10 @@ class DamageEquations(unittest.TestCase):
         from clearpath.vision import ml
         walk = np.zeros((100, 100), bool)
         walk[50:] = True
-        m = ml.damage_metrics(walk, walk.copy(), "Fallen tree or large branches")
-        self.assertTrue(m["suggested_severity"].startswith("Impassable"))
+        m = ml.damage_metrics(walk, walk.copy(), "Fallen tree or limbs")
+        self.assertTrue(m["suggested_severity"].startswith("Fully blocked"))
         m = ml.damage_metrics(walk, np.zeros_like(walk), "Downed power line")
-        self.assertTrue(m["suggested_severity"].startswith("Impassable"))  # always critical
+        self.assertTrue(m["suggested_severity"].startswith("Fully blocked"))  # always critical
 
     def test_no_walkway_found_uses_lower_half(self):
         from clearpath.vision import ml
@@ -294,7 +345,7 @@ OSM = [  # a tiny stand-in for an Overpass response
 class NearbyHelpAndPlan(unittest.TestCase):
     def test_resources_by_need(self):
         from clearpath.reporting import resources
-        near = resources.nearby(28.0006, -82.4594, resources.needed_categories("Fallen tree or large branches"), elements=OSM)
+        near = resources.nearby(28.0006, -82.4594, resources.needed_categories("Fallen tree or limbs"), elements=OSM)
         self.assertEqual(near["by_category"]["tree_service"][0]["name"], "Oak Tree Care")
         self.assertEqual(near["by_category"]["hospital"][0]["name"], "General Hospital")
         self.assertEqual([p["name"] for p in near["by_category"]["shelter"]], ["Rec Center"])  # bus shelter excluded
@@ -311,8 +362,8 @@ class NearbyHelpAndPlan(unittest.TestCase):
         p = plan.rule_plan("Downed power line", None, 5, near, "Palm St")
         self.assertEqual(p["priority"], "Critical")
         self.assertTrue(any("911" in x for x in p["safety"]))
-        near = resources.nearby(28.0006, -82.4594, resources.needed_categories("Fallen tree or large branches"), elements=OSM)
-        p = plan.rule_plan("Fallen tree or large branches", "Impassable: no way through", 60, near)
+        near = resources.nearby(28.0006, -82.4594, resources.needed_categories("Fallen tree or limbs"), elements=OSM)
+        p = plan.rule_plan("Fallen tree or limbs", "Fully blocked: road or sidewalk impassable", 60, near)
         self.assertEqual(p["priority"], "High")
         self.assertEqual(p["call_first"][0]["name"], "Oak Tree Care")
 

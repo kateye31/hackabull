@@ -14,17 +14,22 @@ from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 
 from .. import config
+from ..contracts import IMPASSABLE, PARTLY
 from . import resources
 
 RULES = {
-    "Fallen tree or large branches": ("Tree crew with chainsaws",
+    "Fallen tree or limbs": ("Tree crew with chainsaws",
                                       ["chainsaw", "truck or chipper for the wood", "cones or barricade tape"]),
     "Storm debris pile": ("Debris pickup crew", ["truck or trailer", "heavy gloves", "loader for large piles"]),
     "Flooding or standing water": ("Road and drainage crew", ["water pump", "barricades", "'road flooded' signs"]),
     "Downed power line": ("Electric utility crew (only they touch the line)", ["nothing: keep people away"]),
     "Fallen sign, pole or fence": ("Public works or builder", ["truck", "hand tools", "replacement sign or fence panel"]),
-    "Displaced bin, vehicle or boat": ("Tow truck, or the owner", ["tow truck", "trailer for boats"]),
-    "Damaged or washed-out pavement": ("Road repair crew", ["barricades", "cold-patch asphalt or gravel"]),
+    "Vehicle, boat or object in right-of-way": ("Tow truck, or the owner", ["tow truck", "trailer for boats"]),
+    "Damaged road or sidewalk": ("Road repair crew", ["barricades", "cold-patch asphalt or gravel"]),
+    "Sand or sediment on road": ("Street sweeping / loader crew", ["front-end loader or skid steer", "street sweeper", "dump truck"]),
+    "Illegal dumping or bulk trash": ("Bulk-trash pickup crew", ["truck with lift gate", "heavy gloves"]),
+    "Construction or barrier": ("Whoever owns the work zone (city right-of-way team)", ["nothing: ask them to restore a walkway"]),
+    "Damaged roof or structure": ("Building inspector, then a roofer", ["tarps", "sandbags to hold tarps"]),
     "Other": ("Public works crew", ["truck", "hand tools"]),
 }
 SAFETY = {
@@ -34,7 +39,7 @@ SAFETY = {
     "Flooding or standing water": ["Don't walk or drive through flood water: 6 inches of moving water can knock a "
                                    "person down and 1 foot can carry away a car (National Weather Service).",
                                    "Flood water can hide open drains and live wires."],
-    "Fallen tree or large branches": ["Look up and around for hanging branches and wires before going near.",
+    "Fallen tree or limbs": ["Look up and around for hanging branches and wires before going near.",
                                       "Only trained people should use chainsaws on storm-damaged trees."],
 }
 STEPS = {
@@ -42,7 +47,7 @@ STEPS = {
                           "Utility de-energises and repairs the line", "Then clear any debris"],
     "Flooding or standing water": ["Put up 'road flooded' signs or barricades", "Check drains for blockage",
                                    "Pump or wait for the water to drop", "Check the pavement underneath for washouts"],
-    "Fallen tree or large branches": ["Check for wires in the tree", "Cut a path through first so people can pass",
+    "Fallen tree or limbs": ["Check for wires in the tree", "Cut a path through first so people can pass",
                                       "Remove the rest of the tree", "Sweep the route"],
 }
 
@@ -68,9 +73,9 @@ class Plan(BaseModel):
 def priority(damage_type: str | None, severity: str | None, damage_index: float | None) -> str:
     if damage_type == "Downed power line":
         return "Critical"
-    if severity and severity.startswith("Impassable"):
+    if severity == IMPASSABLE:
         return "Critical" if damage_type == "Flooding or standing water" else "High"
-    if (severity and severity.startswith("Partly")) or (damage_index or 0) >= 15:
+    if severity == PARTLY or (damage_index or 0) >= 15:
         return "Medium"
     return "Low"
 

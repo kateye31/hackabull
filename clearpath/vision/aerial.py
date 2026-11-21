@@ -96,7 +96,7 @@ def consistency(location: dict, damage_type: str | None) -> list[str]:
     canopy = location.get("canopy")
     if canopy is None:
         return ["No satellite view of this spot yet, so nothing to check the photo against."]
-    if damage_type == "Fallen tree or large branches":
+    if damage_type == "Fallen tree or limbs":
         if canopy < 0.05:
             notes.append(f"From above there's almost no tree canopy here ({canopy:.0%}). "
                          "Check the photo really is from this spot.")

@@ -24,24 +24,30 @@ STATUS_LABELS = {
     "dismissed": "Dismissed (no storm damage)",
 }
 
-# What a hurricane leaves on neighborhood streets, sidewalks and walkways.
+# What a hurricane leaves on neighborhood streets, sidewalks, walkways and the public right-of-way.
+# Works for ground photos and before/after aerial imagery (clearpath.satellite, clearpath.vision.aerial).
 OBSTRUCTION_TYPES = (
-    "Fallen tree or large branches",
+    "Fallen tree or limbs",
     "Storm debris pile",
     "Flooding or standing water",
     "Downed power line",
+    "Sand or sediment on road",
+    "Illegal dumping or bulk trash",
+    "Vehicle, boat or object in right-of-way",
     "Fallen sign, pole or fence",
-    "Displaced bin, vehicle or boat",
-    "Damaged or washed-out pavement",
+    "Construction or barrier",
+    "Damaged road or sidewalk",
+    "Damaged roof or structure",
     "Other",
 )
 # Types where people must keep away and call 911 / the utility before anything else.
 HAZARD_TYPES = ("Downed power line",)
 SEVERITIES = (
-    "Impassable: no way through",
-    "Partly blocked: passable with care",
-    "Minor: narrows the route",
+    "Fully blocked: road or sidewalk impassable",
+    "Partly blocked: passable with difficulty",
+    "Minor: hazard beside the road or sidewalk",
 )
+IMPASSABLE, PARTLY, MINOR = SEVERITIES
 
 VERDICTS = ("obstructed", "uncertain", "clear")
 

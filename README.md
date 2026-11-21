@@ -29,7 +29,23 @@ Both read and write the same SQLite database (`data/`). In the reviewer app, go 
 | `CLEARPATH_DEMO_CENTER` | `28.0006,-82.4594` | Where demo routes are placed. |
 | `CLEARPATH_RESIDENT_URL` | `http://localhost:8000` | Link to the residents' site shown in the reviewer app. |
 
-Tests: `python -m unittest -v` (26 tests, offline, models off).
+To test a Gemini key on macOS with zsh, enter it at the hidden prompt and test it on an existing photo pair from the repo root:
+
+```zsh
+read -rs 'GEMINI_API_KEY?Paste Gemini API key and press Return: '
+printf '\n'
+if [[ -n "$GEMINI_API_KEY" ]]; then
+  export GEMINI_API_KEY
+  .venv/bin/python -m clearpath.reporting.gemini \
+    data/demo/palm-street-sidewalk/reference.jpg data/demo/palm-street-sidewalk/initial.jpg
+else
+  printf 'No Gemini key was entered.\n'
+fi
+```
+
+The demo pair checks API access and response parsing. Use two real photos of the same location to assess observation accuracy.
+
+Tests: `python -m unittest -v` (offline, models off).
 
 ## How it fits together
 
@@ -66,7 +82,7 @@ With W = walkable surface in the before-storm photo (SegFormer) and C = the DINO
 - **Narrowest clear width** N = 10th percentile, over image rows near the camera, of |Wᵧ \ C| / |Wᵧ|
 - **Damage index** DI = 100 · B · weight(type), weights from 1.0 (downed line) to 0.5 (fallen sign)
 - **Suggested severity**: impassable if N < 0.25 or B ≥ 0.6; partly blocked if B ≥ 0.15; downed lines are always critical
-- **Tree canopy around a spot** (satellite): share of pixels with excess-green 2g − r − b > 0.05 and brightness < 0.45, within the central circle. ≥35% = high storm risk.
+- **Tree canopy around a spot** (satellite): share of pixels with excess-green 2g − r − b > 0.05, brightness < 0.45 and local texture (9×9 brightness std) ≥ 0.035, within the central circle. The texture test stops smooth green water counting as trees (Madeira Beach went from 65% to 14%). ≥35% = high storm risk.
 - Distances: haversine. Nearby help is sorted by distance (hospitals with an emergency room first).
 
 ## Satellite and the ground photo
@@ -76,6 +92,9 @@ A top-down satellite image and a street-level photo share almost nothing pixel t
 1. **Before-storm satellite** (USGS NAIP, ~0.6 m/pixel, public domain) for each spot: map context and tree-canopy risk.
 2. **Before vs after from above**: upload a NOAA post-storm aerial or a drone photo taken straight down on **Before-storm photos → After-storm aerial**. DINOv2 compares the two top-down images; RemoteCLIP says what shifted (e.g. "+44% flooded"). **Demo: synthetic damage** draws storm damage onto the real tile and is always labelled SYNTHETIC.
 3. **Consistency check** on every report: does the view from above support the ground photo? (A fallen tree reported where there's almost no canopy gets flagged.)
+4. **Person 3's real hurricane sites** (`python -m clearpath.satellite --demo`): Davis Islands, South Tampa and Madeira Beach, with Esri Wayback imagery from before the storms and NOAA aerials flown after Helene and Milton. They appear on both maps, get nearby help, and their reports use Gemini's aerial prompt and RemoteCLIP instead of the ground-photo models.
+
+**What we measured on those real pairs:** DINOv2's aerial change map called all three *clear*, even at Madeira Beach where NOAA's image shows dead lawns from saltwater flooding and debris along the street. Its thresholds were tuned on street-level photos, and the water's colour change swamps the smaller changes on land. RemoteCLIP's shift is the better hint there (+13% "damaged roofs"), and Person 3 tested the aerial Gemini prompt live on these sites. For aerial sites, the reviewer and Gemini make the call; the change map is not trusted.
 
 ## Maps
 
@@ -167,7 +186,7 @@ Use a development subset to tune the patch-distance and verdict thresholds. Hold
 
 ## Verified reporting channel
 
-[config/channels.json](config/channels.json) ships empty on purpose. Person 3 copies each official contact (URL, email or phone) from the city's, county's or power company's own website, records `source_page`, `verified_by` and `verified_on`, and sets `verified: true`. Until then, the app warns that no verified channel exists and labels anything sent as "channel not verified."
+[config/channels.json](config/channels.json) lists City of Tampa channels (objects in the right-of-way, Tampa Connect, illegal dumping) and Tampa Electric's downed-line number (813) 228-1111, copied from the city's own pages with `source_page` recorded. Entries marked `verified_by: Claude Code (web check)` still need a teammate to open each link once and put their own name there. Until a channel is verified, the app labels anything sent to it "channel not verified."
 
 ## Limits
 

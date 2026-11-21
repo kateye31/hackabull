@@ -53,7 +53,9 @@ def save_photo(store: Store, inspection_id: str, phase: str, image_bytes: bytes)
 def analyse(store: Store, cap: SavedCapture, reference_path: str, progress: Callable[[str], None] = _noop):
     progress("Comparing with the before-storm photo")
     overlay = config.OVERLAYS / cap.inspection_id / f"{cap.phase}_{cap.capture_id}.png"
-    result: ComparisonResult = vision.compare(reference_path, cap.image_path, overlay)
+    from .satellite import site_meta  # Person 3's aerial sites (Esri before / NOAA after)
+    result: ComparisonResult = vision.compare(reference_path, cap.image_path, overlay,
+                                              aerial=site_meta(reference_path) is not None)
     store.save_comparison(cap.capture_id, result)
     if cap.phase == "initial":
         progress("Asking Gemini what it sees")

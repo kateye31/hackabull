@@ -14,8 +14,6 @@ import streamlit as st
 
 import os
 
-import streamlit.components.v1 as components
-
 from clearpath import capture, config, demo, geo, mapview, pipeline, vision
 from clearpath.vision import aerial
 from clearpath.contracts import (HAZARD_TYPES, OBSTRUCTION_TYPES, PHASE_LABELS, SEVERITIES, STATUS_LABELS,
@@ -107,7 +105,16 @@ def show_damage(comp: dict):
     if not dmg:
         return
     if dmg.get("available") is False:
-        st.caption(f"Damage analysis off: {dmg.get('reason', '')[:160]}")
+        if dmg.get("aerial"):
+            shift = comp["details"].get("aerial_shift") or {}
+            up = [(k, v) for k, v in shift.items() if v > 0.05]
+            st.markdown("**Damage analysis** · aerial before/after pair")
+            st.caption(("RemoteCLIP, more like after the storm: " + ", ".join(
+                f"{aerial.AERIAL_LABELS[k]} (+{v:.0%})" for k, v in up[:3])) if up
+                       else "RemoteCLIP sees no clear shift between before and after." if shift
+                       else dmg["reason"])
+        else:
+            st.caption(f"Damage analysis off: {dmg.get('reason', '')[:160]}")
         return
     st.markdown("**Damage analysis** · *machine suggestions for the reviewer*")
     c1, c2, c3, c4 = st.columns(4)
@@ -438,6 +445,8 @@ def page_review():
         names = [c["name"] for c in vch]
         channel = vch[names.index(st.selectbox("Send to", names))]
         st.caption(f"Verified by {channel['verified_by']} on {channel['verified_on']} · {channels.contact_line(channel)}")
+        if channel.get("submission_instructions"):
+            st.caption(channel["submission_instructions"])
     else:
         st.warning("No verified reporting channel yet. Person 3: fill in config/channels.json from the official "
                    "city/county storm-debris and power company websites and mark them verified.")
@@ -491,7 +500,7 @@ def page_review():
 def neighborhood_map(locs: list[dict] | None = None, height: int = 460):
     """Leaflet: spots coloured by their most urgent report, nearby help, streets/satellite (clearpath/mapview.py)."""
     data = mapview.map_data(locs if locs is not None else store.locations(), store.inspections())
-    components.html(mapview.leaflet_html(data, height), height=height + 8)
+    st.iframe(mapview.leaflet_html(data, height), height=height + 8)  # contents are escaped in mapview
 
 
 def _open(iid: str):
