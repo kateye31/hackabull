@@ -109,8 +109,8 @@ if (!window.L || !D.spots.length) {{
   document.getElementById("map").outerHTML = '<p class="off">' + (window.L ? "No spots have map coordinates yet." : "Map unavailable offline.") + "</p>";
 }} else {{
   const base = {{
-    "Streets": L.tileLayer("https://{{s}}.basemaps.cartocdn.com/rastertiles/voyager/{{z}}/{{x}}/{{y}}{{r}}.png",
-                           {{maxZoom: 20, subdomains: "abcd", attribution: "© OpenStreetMap contributors © CARTO"}}),
+    "Streets": L.tileLayer("https://tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png",
+                           {{maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>'}}),
     "Satellite": L.tileLayer("https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{{z}}/{{y}}/{{x}}",
                              {{maxNativeZoom: 16, maxZoom: 19, attribution: "Imagery: USGS The National Map"}}),
   }};
