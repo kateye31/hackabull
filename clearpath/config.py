@@ -5,6 +5,20 @@ import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+
+
+def _load_dotenv(path: Path):
+    """KEY=value lines from a git-ignored .env file (e.g. GEMINI_API_KEY); real env vars win."""
+    if not path.exists():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+
+
+_load_dotenv(ROOT / ".env")
 DATA = Path(os.environ.get("CLEARPATH_DATA", ROOT / "data"))
 DB_PATH = DATA / "clearpath.db"
 CAPTURES = DATA / "captures"

@@ -10,8 +10,8 @@ from unittest.mock import patch
 
 _TMP = Path(tempfile.mkdtemp(prefix="clearpath-test-"))
 os.environ["CLEARPATH_DATA"] = str(_TMP)
-os.environ.pop("GEMINI_API_KEY", None)
-os.environ.pop("GOOGLE_API_KEY", None)
+os.environ["GEMINI_API_KEY"] = ""   # empty, not absent: a developer's .env file must not switch Gemini on in tests
+os.environ["GOOGLE_API_KEY"] = ""
 os.environ["CLEARPATH_ML"] = "off"       # no model downloads in the default suite
 os.environ["CLEARPATH_OFFLINE"] = "1"    # no satellite / OpenStreetMap calls
 
@@ -446,6 +446,15 @@ class NeighborhoodMap(unittest.TestCase):
         self.assertIn("high", d["spots"][0]["canopy"])
         html = mapview.leaflet_html(d)
         self.assertNotIn("</script><script>alert", html)
+
+
+class DotEnv(unittest.TestCase):
+    def test_env_file_fills_missing_keys_only(self):
+        f = _TMP / "x.env"
+        f.write_text("\n".join(["# comment", "CLEARPATH_TEST_A='from file'", "CLEARPATH_TEST_B=file"]))
+        os.environ["CLEARPATH_TEST_B"] = "real"
+        config._load_dotenv(f)
+        self.assertEqual((os.environ["CLEARPATH_TEST_A"], os.environ["CLEARPATH_TEST_B"]), ("from file", "real"))
 
 
 if __name__ == "__main__":
