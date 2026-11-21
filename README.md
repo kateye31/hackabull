@@ -14,14 +14,74 @@ After a hurricane, people need to know which neighborhood streets, sidewalks and
 
 ```bash
 pip install -r requirements.txt
-streamlit run app.py
+python -m clearpath.preflight --no-camera     # downloads and caches the models; checks map services
+streamlit run app.py                          # the reviewer app: http://localhost:8501
+uvicorn api.main:app --port 8000              # the residents' website + API: http://localhost:8000
 ```
 
-In the app, go to **Before-storm photos → Add demo locations**. Then, as a resident, **Report damage → pick a spot → Demo photo → Send report**, and as the reviewer, **Review queue → Open**. No camera is needed.
+Both read and write the same SQLite database (`data/`). In the reviewer app, go to **Before-storm photos → Add demo locations**: four demo routes in a residential area of Tampa, each with a real USGS satellite image and nearby help from OpenStreetMap (set `CLEARPATH_DEMO_CENTER=lat,lon` for another neighborhood). Then send a report from the residents' website (**Demo photo** works without a camera) and open it in the reviewer's **Review queue**.
 
-Optional: `set GEMINI_API_KEY=...` (Windows) or `export GEMINI_API_KEY=...` before launching to turn on AI observations. Without a key, the reviewer fills in the details by hand.
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `GEMINI_API_KEY` | none | Gemini observations and the Gemini response planner. Without it, rules plan the response. |
+| `CLEARPATH_ML` | `auto` | `off` skips CLIP, SegFormer and RemoteCLIP (DINOv2 still runs). |
+| `CLEARPATH_OFFLINE` | `0` | `1` = no satellite or OpenStreetMap calls; cached data still works. |
+| `CLEARPATH_DEMO_CENTER` | `28.0006,-82.4594` | Where demo routes are placed. |
+| `CLEARPATH_RESIDENT_URL` | `http://localhost:8000` | Link to the residents' site shown in the reviewer app. |
 
-Tests: `python -m unittest -v`
+Tests: `python -m unittest -v` (26 tests, offline, models off).
+
+## How it fits together
+
+```
+ residents' website (web/index.html)        reviewer app (app.py, Streamlit)
+        │  photo + note + GPS                         │  queue → review → plan → report → after cleanup
+        ▼                                             ▼
+ FastAPI backend (api/main.py) ──► clearpath/pipeline.py ◄────────────┘
+                                      │
+   locate (photo GPS → phone GPS → pick) · save (EXIF stripped) · compare with before-storm photo (DINOv2)
+   damage analysis (CLIP type, SegFormer walkway, equations) · Gemini observations · response plan
+   (Gemini + find_nearby tool, or rules) · nearby help (OpenStreetMap) · satellite (USGS NAIP, RemoteCLIP)
+                                      │
+                                SQLite (clearpath/store.py)
+```
+
+## Models and what we measured
+
+Every model output is a suggestion for the reviewer, never a fact. We tested before choosing:
+
+| Job | Model (Hugging Face) | What we found |
+| --- | --- | --- |
+| What changed since before the storm | `facebook/dinov2-small` | Synthetic storm pairs: 80% recall, 2 of 20 clear paths flagged, AUC 0.89 (vs 50% / 4 of 20 / 0.75 for a pixel diff). |
+| Which kind of damage | `openai/clip-vit-base-patch32`, zero-shot | 0.3 s a photo. On 4 public post-hurricane photos: top guess right on both fallen-tree photos; on the two debris photos "debris" came 2nd and 3rd. Wrong on our cartoon demo drawings. |
+| Where the walkway is | `nvidia/segformer-b0-finetuned-ade-512-512` | 0.3 s. Found 87% of the true walkway (IoU) on a synthetic scene. |
+| What changed from above | `MVRL/remote-clip-vit-base-patch32` (RemoteCLIP, via open_clip) | 0.1 s. Unreliable on one image (called a normal block "flooded" at 0.78), so only the before→after shift is shown. |
+| Tried and dropped | `google/owlvit-base-patch32` (open-vocabulary detector) | 10–17 s a photo on a laptop CPU, found the two fallen trees, missed both debris photos. |
+
+## The damage equations
+
+With W = walkable surface in the before-storm photo (SegFormer) and C = the DINOv2 change mask after alignment:
+
+- **Walkway blocked** B = |W ∩ C| / |W|
+- **Narrowest clear width** N = 10th percentile, over image rows near the camera, of |Wᵧ \ C| / |Wᵧ|
+- **Damage index** DI = 100 · B · weight(type), weights from 1.0 (downed line) to 0.5 (fallen sign)
+- **Suggested severity**: impassable if N < 0.25 or B ≥ 0.6; partly blocked if B ≥ 0.15; downed lines are always critical
+- **Tree canopy around a spot** (satellite): share of pixels with excess-green 2g − r − b > 0.05 and brightness < 0.45, within the central circle. ≥35% = high storm risk.
+- Distances: haversine. Nearby help is sorted by distance (hospitals with an emergency room first).
+
+## Satellite and the ground photo
+
+A top-down satellite image and a street-level photo share almost nothing pixel to pixel, so they are not compared directly. Instead:
+
+1. **Before-storm satellite** (USGS NAIP, ~0.6 m/pixel, public domain) for each spot: map context and tree-canopy risk.
+2. **Before vs after from above**: upload a NOAA post-storm aerial or a drone photo taken straight down on **Before-storm photos → After-storm aerial**. DINOv2 compares the two top-down images; RemoteCLIP says what shifted (e.g. "+44% flooded"). **Demo: synthetic damage** draws storm damage onto the real tile and is always labelled SYNTHETIC.
+3. **Consistency check** on every report: does the view from above support the ground photo? (A fallen tree reported where there's almost no canopy gets flagged.)
+
+## Nearby help and the response plan
+
+One OpenStreetMap (Overpass) query per ~1 km neighborhood cell, fetched when a spot is added and cached for 7 days, so reports never wait for it (a query can take 40 s). Each damage type maps to what it needs: fallen tree → tree service, hardware, builder; flooding → plumber/pumps, hardware, shelter; downed line → fire station, electrician (and 911 + the utility first). Hospitals and shelters are always included.
+
+With a Gemini key, Gemini plans the response as an agent: it gets the confirmed details and the damage numbers, calls a `find_nearby(category)` tool for real places, and returns priority, crew, equipment, steps, safety and who to call. Without a key, rules produce the same structure. OpenStreetMap coverage varies: a missing category means "none mapped nearby", not "none exist".
 
 ## Team
 
@@ -40,6 +100,13 @@ Checklists per person: [docs/PLAN.md](docs/PLAN.md). The hand-off types live in 
 | [clearpath/demo.py](clearpath/demo.py) | 1 | Demo neighborhood routes after a storm, so the app runs without a camera; `demo real` imports your own before/after photos as a backup run |
 | [clearpath/preflight.py](clearpath/preflight.py) | 1 | `python -m clearpath.preflight`: checks the demo laptop (DINOv2 cached, camera, Gemini, channels, photos) |
 | [docs/DEMO.md](docs/DEMO.md) | 1 | Photo shoot, room check, demo script and backup plan |
+| [api/main.py](api/main.py) + [web/index.html](web/index.html) | 1 | FastAPI backend and the residents' website (separate from the reviewer app, same database) |
+| [clearpath/pipeline.py](clearpath/pipeline.py) | 1 | One photo → located, saved, compared, analysed, planned; used by both websites |
+| [clearpath/geo.py](clearpath/geo.py) | 2 | GPS from photos, USGS satellite images, tree-canopy index, geocoding, distances |
+| [clearpath/vision/ml.py](clearpath/vision/ml.py) | 2 | CLIP damage type, SegFormer walkway, damage equations |
+| [clearpath/vision/aerial.py](clearpath/vision/aerial.py) | 2 | Before/after aerial comparison, RemoteCLIP, satellite consistency check |
+| [clearpath/reporting/resources.py](clearpath/reporting/resources.py) | 3 | Contractors and resources near a spot, from OpenStreetMap |
+| [clearpath/reporting/plan.py](clearpath/reporting/plan.py) | 3 | Response plan: Gemini with a `find_nearby` tool, or rules |
 | [clearpath/vision/](clearpath/vision/) | 2 | `compare()` → `ComparisonResult`: alignment, DINOv2 patch comparison, OpenCV baseline, overlay |
 | [clearpath/store.py](clearpath/store.py) | 2 | SQLite: locations, inspections, captures, results, reviews, reports, history |
 | [evaluation/](evaluation/) | 2 | Synthetic test pairs and the DINOv2-vs-OpenCV scorecard |
@@ -101,6 +168,8 @@ Use a development subset to tune the patch-distance and verdict thresholds. Hold
 ## Limits
 
 - Every flag is a suggestion. A person confirms details before anything is reported.
+- No login yet: the residents' site is a separate address, but the reviewer app is not password-protected. Run both on localhost for the demo.
+- Damage-type suggestions are weakest on debris and on anything that isn't a real photo; the walkway equations assume the before-storm photo shows the walkway.
 - A downed power line is an emergency, not a report: the app tells people to stay at least 35 feet away and call 911 and the power company first.
 - Thin or small things, like a downed power line or a small fallen sign, are easy to miss in the patch grid. A person reviews every photo.
 - The before-storm reference must be taken from roughly the same spot. Very different angles fail to align, and the app says so.

@@ -89,6 +89,37 @@ def check_vision():
             line(WARN, "comparison speed", f"{secs:.1f}s per photo; fill the pause with narration")
 
 
+def check_models():
+    """CLIP, SegFormer and RemoteCLIP: loading them here downloads and caches them before the demo."""
+    from .vision import aerial, ml
+    if not ml.enabled():
+        line(WARN, "damage analysis models", "CLEARPATH_ML=off")
+        return
+    for name, load in (("CLIP damage type", ml._clip), ("SegFormer walkway", ml._seg), ("RemoteCLIP aerial", aerial._remoteclip)):
+        t = time.perf_counter()
+        try:
+            load()
+            line(OK, name, f"loaded in {time.perf_counter() - t:.1f}s (cached now)")
+        except Exception as e:
+            line(WARN, name, str(e).splitlines()[0][:150])
+
+
+def check_services():
+    from . import config
+    if config.OFFLINE:
+        line(WARN, "map services", "CLEARPATH_OFFLINE=1: no satellite images or nearby-help lookups")
+        return
+    import requests
+    from .geo import IMAGERY
+    from .reporting.resources import OVERPASS
+    for name, url in ((IMAGERY[0][0], IMAGERY[0][1] + "?f=json"), ("OpenStreetMap Overpass", OVERPASS.replace("interpreter", "status"))):
+        try:
+            r = requests.get(url, headers={"User-Agent": config.USER_AGENT}, timeout=15)
+            line(OK if r.ok else WARN, name, f"HTTP {r.status_code}")
+        except Exception as e:
+            line(WARN, name, f"unreachable ({type(e).__name__}); cached data still works")
+
+
 def check_camera():
     import cv2
     backend = cv2.CAP_DSHOW if sys.platform == "win32" else cv2.CAP_ANY
@@ -173,6 +204,8 @@ def main(argv=None) -> int:
         return 1
     check_data()
     check_vision()
+    check_models()
+    check_services()
     if not args.no_camera:
         check_camera()
     check_gemini(args.gemini)

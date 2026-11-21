@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#d4f000">
+<title>Report storm damage · ClearPath</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --hivis: #d4f000;          /* fluorescent yellow-green, vest ground */
+  --hivis-ink: #1b1d0e;      /* text on hi-vis: 14:1 */
+  --reflect: #c9ced3;        /* retroreflective silver */
+  --reflect-hi: #f4f6f7;
+  --hazard: #b3261e;         /* safety red-orange, hazard only */
+  --hazard-ground: #fde7e4;
+  --ground: #ffffff;
+  --panel: #f3f4f1;
+  --ink: #16181a;
+  --ink-2: #464c52;          /* secondary text: 8.6:1 on white */
+  --line: #c9cdc6;
+  --focus: #16181a;
+  --radius: 10px;
+  --font: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #121416;
+    --panel: #1d2023;
+    --ink: #f1f3f4;
+    --ink-2: #b6bdc3;        /* 9.4:1 on ground */
+    --line: #3a3f44;
+    --hazard: #ffb4a9;
+    --hazard-ground: #3b1411;
+    --focus: #d4f000;
+    --reflect: #8d949a;
+    --reflect-hi: #d9dde0;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--ground); color: var(--ink);
+  font: 400 1.0625rem/1.5 var(--font); caret-color: var(--ink);
+}
+::selection { background: var(--hivis); color: var(--hivis-ink); }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; border-radius: 4px; }
+a { color: inherit; text-underline-offset: 0.18em; }
+
+/* the vest: hi-vis band with a two-stripe retroreflective edge */
+.band {
+  background: var(--hivis); color: var(--hivis-ink);
+  padding: calc(14px + env(safe-area-inset-top)) 16px 0;
+}
+.band-inner { max-width: 560px; margin: 0 auto; padding-bottom: 14px; }
+.brand { font-weight: 700; font-size: 0.9375rem; letter-spacing: 0.01em; margin: 0 0 2px; }
+.band h1 { font-size: clamp(1.6rem, 6vw, 2rem); line-height: 1.15; margin: 0; text-wrap: balance; }
+.reflect { height: 22px; position: relative; overflow: hidden;
+  background:
+    linear-gradient(var(--reflect), var(--reflect)) 0 3px / 100% 6px no-repeat,
+    linear-gradient(var(--reflect), var(--reflect)) 0 13px / 100% 6px no-repeat,
+    var(--hivis); }
+.reflect::after { /* light catching the tape */
+  content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(100deg, transparent 30%, var(--reflect-hi) 50%, transparent 70%);
+  mix-blend-mode: screen; opacity: 0; }
+.sent .reflect::after { animation: catch 1.1s cubic-bezier(.16,1,.3,1) 1 forwards; }
+@keyframes catch { 0% { transform: translateX(-100%); opacity: 1; } 100% { transform: translateX(100%); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .sent .reflect::after { animation: none; } }
+
+main { max-width: 560px; margin: 0 auto; padding: 18px 16px calc(32px + env(safe-area-inset-bottom)); }
+.hazard {
+  display: flex; gap: 12px; align-items: flex-start;
+  background: var(--hazard-ground); color: var(--ink);
+  border: 2px solid var(--hazard); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 26px;
+}
+.hazard svg { flex: none; color: var(--hazard); margin-top: 2px; }
+.hazard p { margin: 0; }
+.hazard strong { display: block; }
+.call { display: inline-block; margin-top: 6px; font-weight: 700; color: var(--hazard); }
+
+h2 { font-size: 1.25rem; line-height: 1.25; margin: 30px 0 10px; text-wrap: balance; }
+h2:first-of-type { margin-top: 0; }
+.hint { color: var(--ink-2); margin: -4px 0 12px; font-size: 0.9375rem; }
+
+/* photo: the biggest target on the page */
+.shoot { position: relative; display: block; border: 2px dashed var(--line); border-radius: var(--radius);
+  background: var(--panel); min-height: 168px; cursor: pointer; overflow: hidden; }
+.shoot:hover { border-color: var(--ink-2); }
+.shoot:focus-within { outline: 3px solid var(--focus); outline-offset: 3px; }
+.shoot input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+.shoot .empty { display: grid; place-items: center; gap: 8px; padding: 34px 16px; text-align: center; font-weight: 700; }
+.shoot .empty span { font-weight: 400; color: var(--ink-2); font-size: 0.9375rem; }
+.shoot img { display: block; width: 100%; max-height: 360px; object-fit: cover; }
+.shoot.has-photo { border-style: solid; }
+.retake { position: absolute; right: 10px; bottom: 10px; background: var(--ground); color: var(--ink);
+  border-radius: 999px; padding: 6px 12px; font-weight: 700; font-size: 0.875rem;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.25); pointer-events: none; }
+
+.row { display: flex; gap: 10px; flex-wrap: wrap; }
+button, select, textarea { font: inherit; color: inherit; }
+.btn { min-height: 48px; padding: 10px 16px; border-radius: var(--radius); border: 2px solid var(--ink);
+  background: var(--ground); font-weight: 700; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.btn:hover { background: var(--panel); }
+.btn:disabled { opacity: 0.55; cursor: not-allowed; }
+label.field { display: block; font-weight: 700; margin: 14px 0 6px; }
+select, textarea { width: 100%; min-height: 48px; padding: 10px 12px; border: 2px solid var(--line);
+  border-radius: var(--radius); background: var(--ground); accent-color: var(--hivis); }
+select:hover, textarea:hover { border-color: var(--ink-2); }
+textarea { min-height: 96px; resize: vertical; }
+textarea::placeholder { color: var(--ink-2); opacity: 1; }
+.status-line { margin: 10px 0 0; color: var(--ink-2); font-size: 0.9375rem; min-height: 1.5em; }
+.status-line.ok { color: var(--ink); font-weight: 700; }
+.before { display: flex; gap: 12px; align-items: center; margin-top: 12px; }
+.before img { width: 96px; height: 72px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); }
+.before p { margin: 0; color: var(--ink-2); font-size: 0.9375rem; }
+
+/* the primary action wears the vest */
+.send { margin-top: 30px; width: 100%; min-height: 60px; border: 0; border-radius: var(--radius);
+  background: var(--hivis); color: var(--hivis-ink); font-size: 1.1875rem; font-weight: 700; cursor: pointer;
+  box-shadow: inset 0 -8px 0 -2px var(--reflect), 0 2px 6px rgb(0 0 0 / 0.18); padding-bottom: 6px; }
+.send:hover { filter: brightness(0.96); }
+.send:disabled { background: var(--panel); color: var(--ink-2); box-shadow: inset 0 0 0 2px var(--line); cursor: not-allowed; }
+.error { margin: 12px 0 0; color: var(--hazard); font-weight: 700; }
+
+/* after sending */
+.done { display: none; }
+.sent form { display: none; }
+.sent .done { display: block; }
+.ref { font-variant-numeric: tabular-nums; font-size: clamp(2.2rem, 10vw, 2.75rem); font-weight: 700; letter-spacing: 0.01em; margin: 2px 0 4px; }
+.progress { display: flex; align-items: center; gap: 10px; margin: 6px 0 22px; font-weight: 700; }
+.dot { width: 12px; height: 12px; border-radius: 50%; background: var(--ink-2); }
+.progress.working .dot { background: var(--hivis); box-shadow: 0 0 0 3px var(--hivis-ink); animation: pulse 1.4s ease-in-out infinite; }
+.progress.ready .dot { background: #2e7d32; }
+@keyframes pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .progress.working .dot { animation: none; } }
+.help { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--line); }
+.help li { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.help .what { color: var(--ink-2); font-size: 0.875rem; }
+.help .name { font-weight: 700; }
+.help .dist { color: var(--ink-2); font-variant-numeric: tabular-nums; font-size: 0.9375rem; text-align: right; }
+.help a.tel { grid-column: 1 / -1; font-weight: 700; }
+.muted { color: var(--ink-2); }
+.foot { margin-top: 34px; color: var(--ink-2); font-size: 0.875rem; }
+</style>
+</head>
+<body>
+<header class="band">
+  <div class="band-inner">
+    <p class="brand">ClearPath</p>
+    <h1>Report storm damage</h1>
+  </div>
+</header>
+<div class="reflect" aria-hidden="true"></div>
+
+<main>
+  <div class="hazard" role="note">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4M12 17.5v.01"/></svg>
+    <p><strong>Downed power line? Stay at least 35 feet away.</strong>
+      Don't go closer for a photo. Call 911 and keep others back.
+      <a class="call" href="tel:911">Call 911</a></p>
+  </div>
+
+  <form id="report" novalidate>
+    <h2 id="photo-h">Take a photo of what's blocking the way</h2>
+    <p class="hint">Stand on the sidewalk, not in the street. One clear photo is enough.</p>
+    <label class="shoot" id="shoot" aria-labelledby="photo-h">
+      <input id="photo" name="photo" type="file" accept="image/*" capture="environment">
+      <div class="empty" id="shoot-empty">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>
+        Take or choose a photo
+        <span>Opens your camera on a phone</span>
+      </div>
+      <img id="preview" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="Your photo" hidden>
+      <span class="retake" id="retake" hidden>Change photo</span>
+    </label>
+
+    <h2>Where is it?</h2>
+    <div class="row">
+      <button type="button" class="btn" id="locate">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
+        Use my location
+      </button>
+    </div>
+    <p class="status-line" id="locate-status" aria-live="polite"></p>
+    <label class="field" for="spot">Or pick the closest spot</label>
+    <select id="spot" name="location_id"><option value="">Loading spots…</option></select>
+    <div class="before" id="before" hidden>
+      <img id="before-img" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="">
+      <p>Before the storm. Try to take your photo from about here.</p>
+    </div>
+
+    <h2><label for="note">What did you see? <span class="muted">(optional)</span></label></h2>
+    <textarea id="note" name="note" maxlength="1000" placeholder="e.g. a big branch across the sidewalk, no way past with a wheelchair"></textarea>
+
+    <button class="send" id="send" type="submit" disabled>Send report</button>
+    <p class="error" id="error" role="alert" hidden></p>
+  </form>
+
+  <section class="done" aria-live="polite">
+    <h2>Thank you. Your report is in.</h2>
+    <p class="muted" style="margin:0">Report number</p>
+    <p class="ref" id="ref-id">INS-0000</p>
+    <p class="muted" id="ref-where" style="margin:0 0 10px"></p>
+    <div class="progress working" id="progress"><span class="dot" aria-hidden="true"></span><span id="progress-text">Checking your photo…</span></div>
+    <h2>Help near you</h2>
+    <ul class="help" id="help"><li><span class="muted">Looking up nearby help…</span></li></ul>
+    <p class="foot">A neighborhood reviewer checks every report before it goes to the city. You don't need to do anything else.</p>
+    <button type="button" class="btn" id="again" style="margin-top:14px">Report something else</button>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const state = { lat: null, lon: null, spots: [] };
+
+function km(m) { return m == null ? "" : m < 950 ? `${Math.round(m / 10) * 10} m` : `${(m / 1609.34).toFixed(1)} mi`; }
+function dist(a, b, c, d) {  // haversine, metres
+  const r = (x) => x * Math.PI / 180, R = 6371000;
+  const h = Math.sin(r(c - a) / 2) ** 2 + Math.cos(r(a)) * Math.cos(r(c)) * Math.sin(r(d - b) / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+function ready() { $("send").disabled = !$("photo").files.length; }
+
+async function loadSpots() {
+  try {
+    const res = await fetch("/api/locations");
+    state.spots = await res.json();
+  } catch { state.spots = []; }
+  const sel = $("spot");
+  sel.innerHTML = "";
+  sel.append(new Option(state.spots.length ? "Choose a spot…" : "No spots set up yet", ""));
+  for (const s of state.spots) sel.append(new Option(s.name, s.id));
+}
+
+function showBefore() {
+  const s = state.spots.find((x) => String(x.id) === $("spot").value);
+  $("before").hidden = !s;
+  if (s) $("before-img").src = s.before_url;
+}
+
+$("photo").addEventListener("change", () => {
+  const f = $("photo").files[0];
+  $("shoot").classList.toggle("has-photo", !!f);
+  $("shoot-empty").hidden = !!f;
+  $("preview").hidden = $("retake").hidden = !f;
+  if (f) $("preview").src = URL.createObjectURL(f);
+  ready();
+});
+$("spot").addEventListener("change", showBefore);
+
+$("locate").addEventListener("click", () => {
+  const out = $("locate-status");
+  out.className = "status-line";
+  if (!navigator.geolocation) { out.textContent = "This browser can't share your location. Pick the spot below."; return; }
+  out.textContent = "Finding you…";
+  $("locate").disabled = true;
+  navigator.geolocation.getCurrentPosition((pos) => {
+    $("locate").disabled = false;
+    state.lat = pos.coords.latitude; state.lon = pos.coords.longitude;
+    const near = state.spots.filter((s) => s.lat != null)
+      .map((s) => ({ s, d: dist(state.lat, state.lon, s.lat, s.lon) })).sort((a, b) => a.d - b.d)[0];
+    if (near && near.d < 250) {
+      $("spot").value = near.s.id; showBefore();
+      out.className = "status-line ok";
+      out.textContent = `Got it: ${near.s.name}, ${km(near.d)} away.`;
+    } else {
+      out.textContent = "Location found, but it's not near a known spot. Pick the closest one below.";
+    }
+  }, () => {
+    $("locate").disabled = false;
+    out.textContent = "Couldn't get your location. Pick the spot below.";
+  }, { enableHighAccuracy: true, timeout: 12000 });
+});
+
+$("report").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const err = $("error"); err.hidden = true;
+  const body = new FormData();
+  body.append("photo", $("photo").files[0]);
+  body.append("note", $("note").value);
+  if (state.lat != null) { body.append("lat", state.lat); body.append("lon", state.lon); }
+  if ($("spot").value) body.append("location_id", $("spot").value);
+  $("send").disabled = true; $("send").textContent = "Sending…";
+  try {
+    const res = await fetch("/api/reports", { method: "POST", body });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || "Something went wrong. Try again.");
+    $("ref-id").textContent = data.id;
+    $("ref-where").textContent = data.location + (data.distance_m != null ? ` · placed by ${data.matched_by}` : "");
+    document.body.classList.add("sent");
+    window.scrollTo({ top: 0 });
+    poll(data.id);
+  } catch (x) {
+    err.textContent = x.message.includes("fetch") ? "No connection. Your photo is still here; try again when you have signal." : x.message;
+    err.hidden = false;
+  } finally {
+    $("send").textContent = "Send report"; ready();
+  }
+});
+
+async function poll(id, tries = 0) {
+  let data = null;
+  try { data = await (await fetch(`/api/reports/${id}`)).json(); } catch {}
+  if (data && !data.processing) {
+    $("progress").className = "progress ready";
+    $("progress-text").textContent = data.status_label;
+    const list = $("help"); list.innerHTML = "";
+    if (!data.nearby_help.length) list.innerHTML = '<li><span class="muted">No nearby help found on the map for this spot.</span></li>';
+    for (const p of data.nearby_help) {
+      const li = document.createElement("li");
+      li.innerHTML = `<div><div class="what"></div><div class="name"></div></div><div class="dist"></div>`;
+      li.querySelector(".what").textContent = p.category_label;
+      li.querySelector(".name").textContent = p.name;
+      li.querySelector(".dist").textContent = km(p.distance_m);
+      if (p.phone) { const a = document.createElement("a"); a.className = "tel"; a.href = `tel:${p.phone.replace(/[^+\d]/g, "")}`; a.textContent = `Call ${p.phone}`; li.append(a); }
+      list.append(li);
+    }
+    return;
+  }
+  if (tries > 60) { $("progress-text").textContent = "Still checking. The reviewer will see it either way."; return; }
+  setTimeout(() => poll(id, tries + 1), 2500);
+}
+
+$("again").addEventListener("click", () => location.reload());
+loadSpots();
+</script>
+</body>
+</html>
